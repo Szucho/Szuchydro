@@ -1,18 +1,13 @@
 file(REMOVE_RECURSE
-  "C:/Users/szuch/cpp_coding/Szuchydro-2D/builds/szuchydro2d.exe"
-  "C:/Users/szuch/cpp_coding/Szuchydro-2D/builds/szuchydro2d.exe.manifest"
-  "C:/Users/szuch/cpp_coding/Szuchydro-2D/builds/szuchydro2d.pdb"
-  "CMakeFiles/szuchydro2d.dir/sources/grid.cpp.obj"
-  "CMakeFiles/szuchydro2d.dir/sources/grid.cpp.obj.d"
-  "CMakeFiles/szuchydro2d.dir/sources/hydro_io.cpp.obj"
-  "CMakeFiles/szuchydro2d.dir/sources/hydro_io.cpp.obj.d"
-  "CMakeFiles/szuchydro2d.dir/sources/main.cpp.obj"
-  "CMakeFiles/szuchydro2d.dir/sources/main.cpp.obj.d"
-  "CMakeFiles/szuchydro2d.dir/sources/mesh.cpp.obj"
-  "CMakeFiles/szuchydro2d.dir/sources/mesh.cpp.obj.d"
-  "CMakeFiles/szuchydro2d.dir/sources/meshtree.cpp.obj"
-  "CMakeFiles/szuchydro2d.dir/sources/meshtree.cpp.obj.d"
-  "libszuchydro2d.dll.a"
+  "CMakeFiles/szuchydro2d.dir/link.d"
+  "CMakeFiles/szuchydro2d.dir/sources/grid.cpp.o"
+  "CMakeFiles/szuchydro2d.dir/sources/grid.cpp.o.d"
+  "CMakeFiles/szuchydro2d.dir/sources/hydro_io.cpp.o"
+  "CMakeFiles/szuchydro2d.dir/sources/hydro_io.cpp.o.d"
+  "CMakeFiles/szuchydro2d.dir/sources/main.cpp.o"
+  "CMakeFiles/szuchydro2d.dir/sources/main.cpp.o.d"
+  "szuchydro2d"
+  "szuchydro2d.pdb"
 )
 
 # Per-language clean rules from dependency scanning.

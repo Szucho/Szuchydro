@@ -28,6 +28,8 @@ using View4D = Kokkos::View<Real****, Kokkos::LayoutRight, MemorySpace>;
 using IntView2D = Kokkos::View<int**, Kokkos::LayoutRight, MemorySpace>;
 
 //host mirror views for data transfer and CPU-side inspection I/O
+using HostView1D    = typename View1D::host_mirror_type;
+using HostView3D    = typename View3D::host_mirror_type;
 using HostView4D    = typename View4D::host_mirror_type;
 using HostView2D    = typename View2D::host_mirror_type;
 using HostIntView2D = typename IntView2D::host_mirror_type;

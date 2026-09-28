@@ -1,1 +1,0 @@
- "_deps/kokkos-build/containers/src/libkokkoscontainers.a" "_deps/kokkos-build/algorithms/src/libkokkosalgorithms.a" "_deps/kokkos-build/simd/src/libkokkossimd.a" "_deps/kokkos-build/core/src/libkokkoscore.a" -lkernel32 -luser32 -lgdi32 -lwinspool -lshell32 -lole32 -loleaut32 -luuid -lcomdlg32 -ladvapi32 

@@ -34,15 +34,22 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(Kokkos)
 
+
+add_subdirectory(mesh)
+
+#sources will all be needed for the executable
 file(GLOB SOURCES "sources/*.cpp")
-
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/builds)
-
 add_executable(szuchydro2d ${SOURCES})
 
+#link headers to mesh static library
 target_include_directories(szuchydro2d PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/headers
 )
+target_link_libraries(szuchydro2d PRIVATE szuchydro_mesh)
+
+# set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/builds)
+
+# add_executable(szuchydro2d ${SOURCES})
 
 #Compiler Flag Optimizations (-march=native)
 include(CheckCXXCompilerFlag)

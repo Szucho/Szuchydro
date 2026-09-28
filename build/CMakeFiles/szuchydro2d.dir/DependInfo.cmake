@@ -8,11 +8,10 @@ set(CMAKE_DEPENDS_LANGUAGES
 
 # The set of dependency files which are needed:
 set(CMAKE_DEPENDS_DEPENDENCY_FILES
-  "C:/Users/szuch/cpp_coding/Szuchydro-2D/sources/grid.cpp" "CMakeFiles/szuchydro2d.dir/sources/grid.cpp.obj" "gcc" "CMakeFiles/szuchydro2d.dir/sources/grid.cpp.obj.d"
-  "C:/Users/szuch/cpp_coding/Szuchydro-2D/sources/hydro_io.cpp" "CMakeFiles/szuchydro2d.dir/sources/hydro_io.cpp.obj" "gcc" "CMakeFiles/szuchydro2d.dir/sources/hydro_io.cpp.obj.d"
-  "C:/Users/szuch/cpp_coding/Szuchydro-2D/sources/main.cpp" "CMakeFiles/szuchydro2d.dir/sources/main.cpp.obj" "gcc" "CMakeFiles/szuchydro2d.dir/sources/main.cpp.obj.d"
-  "C:/Users/szuch/cpp_coding/Szuchydro-2D/sources/mesh.cpp" "CMakeFiles/szuchydro2d.dir/sources/mesh.cpp.obj" "gcc" "CMakeFiles/szuchydro2d.dir/sources/mesh.cpp.obj.d"
-  "C:/Users/szuch/cpp_coding/Szuchydro-2D/sources/meshtree.cpp" "CMakeFiles/szuchydro2d.dir/sources/meshtree.cpp.obj" "gcc" "CMakeFiles/szuchydro2d.dir/sources/meshtree.cpp.obj.d"
+  "/mnt/c/Users/szuch/cpp_coding/Szuchydro-2D/sources/grid.cpp" "CMakeFiles/szuchydro2d.dir/sources/grid.cpp.o" "gcc" "CMakeFiles/szuchydro2d.dir/sources/grid.cpp.o.d"
+  "/mnt/c/Users/szuch/cpp_coding/Szuchydro-2D/sources/hydro_io.cpp" "CMakeFiles/szuchydro2d.dir/sources/hydro_io.cpp.o" "gcc" "CMakeFiles/szuchydro2d.dir/sources/hydro_io.cpp.o.d"
+  "/mnt/c/Users/szuch/cpp_coding/Szuchydro-2D/sources/main.cpp" "CMakeFiles/szuchydro2d.dir/sources/main.cpp.o" "gcc" "CMakeFiles/szuchydro2d.dir/sources/main.cpp.o.d"
+  "" "szuchydro2d" "gcc" "CMakeFiles/szuchydro2d.dir/link.d"
   )
 
 # Targets to which this target links which contain Fortran sources.

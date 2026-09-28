@@ -160,9 +160,19 @@ std::ofstream openGridFile(const std::string& outdir, Mesh& mesh){
   std::string path = outdir + "/grid.bin";
   std::ofstream f(path, std::ios::binary);
   if(!f) throw std::runtime_error("Cannot open grid output file: " + path);
+  return f;
+}
 
+//writing into grid.bin
+void writeFrame(std::ofstream& f, Mesh& mesh, double t){
+  //write timestamp
+  f.write(reinterpret_cast<const char*>(&t), sizeof(double));
+
+  //write active block count for this specific frame
   uint64_t nblocks = mesh.blocks().size();
   f.write(reinterpret_cast<const char*>(&nblocks), sizeof(uint64_t));
+
+  //write block geometries for this frame
   for(const auto& bptr : mesh.blocks()){
     const MeshBlock& b = *bptr;
     int32_t level = b.loc.level;
@@ -178,13 +188,8 @@ std::ofstream openGridFile(const std::string& outdir, Mesh& mesh){
     f.write(reinterpret_cast<const char*>(&nx1), sizeof(uint64_t));
     f.write(reinterpret_cast<const char*>(&nx2), sizeof(uint64_t));
   }
-  return f;
-}
 
-//writing into grid.bin
-void writeFrame(std::ofstream& f, Mesh& mesh, double t){
-  f.write(reinterpret_cast<const char*>(&t), sizeof(double));
-
+  //write cell data payload
   View4D device_data = mesh.get_data_view();
   HostView4D host_data = Kokkos::create_mirror_view(device_data);
   Kokkos::deep_copy(host_data, device_data);

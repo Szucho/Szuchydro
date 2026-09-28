@@ -1,12 +1,12 @@
 import numpy as np
 import os
+import struct
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 
 
 SAVE_OUTPUTS = True
 FPS = 30
-
 
 
 def read_meta(outdir):
@@ -22,82 +22,116 @@ def read_meta(outdir):
 
 
 def read_grid(path):
-    """Returns (blocks, frames).
-    blocks: list of dicts, one per MeshBlock, in order
-      {level, lx1, lx2, x1min, x1max, x2min, x2max, nx1, nx2}
-    frames: list of (t, block_arrays), block_arrays[k] has shape
-      (blocks[k]['nx1'], blocks[k]['nx2'], 4)
-    that block's own active state vector, same (i,j) order the sim used."""
+    """Returns frames: list of (t, block_arrays, frame_blocks)"""
+    frames = []
+    block_fmt = "<i q q d d d d Q Q"  # int32, int64*2, double*4, uint64*2
+    block_size = struct.calcsize(block_fmt)
+    
     with open(path, 'rb') as f:
-        nblocks = int(np.frombuffer(f.read(8), dtype=np.uint64)[0])
-        blocks = []
-        for _ in range(nblocks):
-            level = int(np.frombuffer(f.read(4), dtype=np.int32)[0])
-            lx1, lx2 = np.frombuffer(f.read(16), dtype=np.int64)
-            x1min, x1max, x2min, x2max = np.frombuffer(f.read(32), dtype=np.float64)
-            nx1, nx2 = np.frombuffer(f.read(16), dtype=np.uint64)
-            blocks.append(dict(level=level, lx1=int(lx1), lx2=int(lx2),
-                                x1min=x1min, x1max=x1max, x2min=x2min, x2max=x2max,
-                                nx1=int(nx1), nx2=int(nx2)))
-
-        frames = []
         while True:
-            tbuf = f.read(8)
-            if not tbuf: break
-            t = np.frombuffer(tbuf, dtype=np.float64)[0]
+            # 1. Read timestamp (double)
+            t_buf = f.read(8)
+            if not t_buf:
+                break
+            t = np.frombuffer(t_buf, dtype=np.float64)[0]
+            
+            # 2. Read nblocks for this specific frame (uint64)
+            nb_buf = f.read(8)
+            if len(nb_buf) < 8:
+                break
+            nblocks = int(np.frombuffer(nb_buf, dtype=np.uint64)[0])
+            
+            # 3. Read block geometries for this frame
+            frame_blocks = []
+            for _ in range(nblocks):
+                bdata = f.read(block_size)
+                if len(bdata) < block_size:
+                    break
+                level, lx1, lx2, x1min, x1max, x2min, x2max, nx1, nx2 = struct.unpack(block_fmt, bdata)
+                frame_blocks.append(dict(
+                    level=int(level), lx1=int(lx1), lx2=int(lx2),
+                    x1min=x1min, x1max=x1max, x2min=x2min, x2max=x2max,
+                    nx1=int(nx1), nx2=int(nx2)
+                ))
+            
+            # 4. Read cell data payload for this frame's active blocks
             block_arrays = []
             complete = True
-            for blk in blocks:
-                n = blk['nx1'] * blk['nx2'] * 4
-                raw = f.read(n * 8)
-                if len(raw) != n * 8:
+            for blk in frame_blocks:
+                n_cells = blk['nx1'] * blk['nx2'] * 4  # NVAR = 4
+                raw = f.read(n_cells * 8)              # 8 bytes per double
+                if len(raw) != n_cells * 8:
                     complete = False
                     break
                 block_arrays.append(np.frombuffer(raw, dtype=np.float64).reshape(blk['nx1'], blk['nx2'], 4))
-            if not complete: break
-            frames.append((t, block_arrays))
-    return blocks, frames
+            
+            if not complete:
+                break
+            frames.append((t, block_arrays, frame_blocks))
+            
+    return frames
 
 
-def build_canvas_layout(blocks):
-    """
-    THIS SOLUTION MIGHT NOT BE THE BEST!!!
-    Work out a single finest-resolution grid every block's data can be
-    pasted into. Returns (nx_c, ny_c, placements) where placements[k] is
-    (i0, i1, j0, j1, upsample_i, upsample_j) for blocks[k] the pixel
-    range it occupies on the canvas, and how much to repeat its own
-    cells by along each axis to fill that range."""
-    maxlevel = max(b['level'] for b in blocks)
-    #my reasoning here:
-    #every block has the same active cell count per axis by construction
-    #(MeshInputs::nx1_block/nx2_block), so the canvas size is just that
-    #times the number of level-0 blocks needed to tile the domain, times
-    #the finest refinement factor
-    nx1_block = blocks[0]['nx1']
-    nx2_block = blocks[0]['nx2']
-    #infer root block-grid dimensions from the level-0 blocks' lx1/lx2 span
-    lvl0 = [b for b in blocks if b['level'] == 0]
-    nblk1_root = max(b['lx1'] for b in lvl0) + 1
-    nblk2_root = max(b['lx2'] for b in lvl0) + 1
-
-    nx_c = nblk1_root * nx1_block * (1 << maxlevel)
-    ny_c = nblk2_root * nx2_block * (1 << maxlevel)
-
-    placements = []
-    for b in blocks:
-        factor = 1 << (maxlevel - b['level'])
-        i0 = b['lx1'] * nx1_block * factor
-        j0 = b['lx2'] * nx2_block * factor
-        i1 = i0 + nx1_block * factor
-        j1 = j0 + nx2_block * factor
-        placements.append((i0, i1, j0, j1, factor, factor))
-    return nx_c, ny_c, placements
+def get_global_canvas_resolution(frames, meta):
+    global_max_level = 0
+    for _, _, frame_blocks in frames:
+        ml = max(b['level'] for b in frame_blocks)
+        if ml > global_max_level:
+            global_max_level = ml
+            
+    # frames[0] is (t, block_arrays, frame_blocks). Index [2] is frame_blocks!
+    base_blk = frames[0][2][0]
+    nx1_block = base_blk['nx1']
+    nx2_block = base_blk['nx2']
+    
+    xmin, xmax = meta['xmin'], meta['xmax']
+    ymin, ymax = meta['ymin'], meta['ymax']
+    
+    # Locate any frame with level 0 blocks to get root block counts safely
+    lvl0_any = None
+    for _, _, frame_blocks in frames:
+        lvl0 = [b for b in frame_blocks if b['level'] == 0]
+        if lvl0:
+            lvl0_any = lvl0
+            break
+    if lvl0_any is None:
+        lvl0_any = frames[0][2]
+        
+    nblk1 = max(b['lx1'] for b in lvl0_any) + 1
+    nblk2 = max(b['lx2'] for b in lvl0_any) + 1
+    
+    nx_c = nblk1 * nx1_block * (1 << global_max_level)
+    ny_c = nblk2 * nx2_block * (1 << global_max_level)
+    return nx_c, ny_c, global_max_level
 
 
-def stitch_frame(block_arrays, placements, nx_c, ny_c):
+def stitch_frame_by_coords(block_arrays, frame_blocks, xmin, xmax, ymin, ymax, nx_c, ny_c):
     canvas = np.empty((nx_c, ny_c, 4))
-    for data, (i0, i1, j0, j1, fi, fj) in zip(block_arrays, placements):
-        canvas[i0:i1, j0:j1, :] = np.repeat(np.repeat(data, fi, axis=0), fj, axis=1)
+    canvas[:] = 0.0
+    
+    for data, b in zip(block_arrays, frame_blocks):
+        i0 = int(round((b['x1min'] - xmin) / (xmax - xmin) * nx_c))
+        i1 = int(round((b['x1max'] - xmin) / (xmax - xmin) * nx_c))
+        j0 = int(round((b['x2min'] - ymin) / (ymax - ymin) * ny_c))
+        j1 = int(round((b['x2max'] - ymin) / (ymax - ymin) * ny_c))
+        
+        i0 = max(0, min(nx_c, i0))
+        i1 = max(0, min(nx_c, i1))
+        j0 = max(0, min(ny_c, j0))
+        j1 = max(0, min(ny_c, j1))
+        
+        if i1 > i0 and j1 > j0:
+            target_ni = i1 - i0
+            target_nj = j1 - j0
+            fi = max(1, target_ni // b['nx1'])
+            fj = max(1, target_nj // b['nx2'])
+            
+            expanded = np.repeat(np.repeat(data, fi, axis=0), fj, axis=1)
+            
+            ei = min(i0 + expanded.shape[0], nx_c)
+            ej = min(j0 + expanded.shape[1], ny_c)
+            canvas[i0:ei, j0:ej, :] = expanded[:ei-i0, :ej-j0, :]
+            
     return canvas
 
 
@@ -117,35 +151,30 @@ xmin, xmax = meta['xmin'], meta['xmax']
 ymin, ymax = meta['ymin'], meta['ymax']
 gamma      = meta['gamma']
 
-blocks, frames = read_grid(os.path.join(outdir, "grid.bin"))
+frames = read_grid(os.path.join(outdir, "grid.bin"))
 if not frames:
     raise RuntimeError("grid.bin is empty or could not be read")
 
-maxlevel = max(b['level'] for b in blocks)
-if len(blocks) > 1 or maxlevel > 0:
-    print(f"grid.bin: {len(blocks)} block(s), refinement up to level {maxlevel}\\"
-          f"stitching onto a single canvas for plotting (coarser blocks are "
-          f"nearest-neighbor upsampled, not interpolated; this is a display "
-          f"convenience, not a claim about solution accuracy there. PROPER PLOT IDEA NEEDED.).")
+nx_c, ny_c, global_max_level = get_global_canvas_resolution(frames, meta)
 
-nx_c, ny_c, placements = build_canvas_layout(blocks)
+times = []
+prims = []
+for t, block_arrays, frame_blocks in frames:
+    canvas_data = stitch_frame_by_coords(block_arrays, frame_blocks, xmin, xmax, ymin, ymax, nx_c, ny_c)
+    times.append(t)
+    prims.append(compute_primitives(canvas_data, gamma))
 
-times = [f[0] for f in frames]
-prims = [compute_primitives(stitch_frame(f[1], placements, nx_c, ny_c), gamma) for f in frames]
-
-#physical cell-center coordinates on the canvas
+# Stable global canvas dimensions
 dx = (xmax - xmin) / nx_c
 dy = (ymax - ymin) / ny_c
 x_centers = xmin + (np.arange(nx_c) + 0.5) * dx
 j_mid = ny_c // 2
-y_mid_val = ymin + (j_mid + 0.5) * dy
 
-#meshgrid boundaries for 2D pcolormesh
 x_edges = np.linspace(xmin, xmax, nx_c + 1)
 y_edges = np.linspace(ymin, ymax, ny_c + 1)
 X, Y = np.meshgrid(x_edges, y_edges)
 
-#1D slice animation
+# 1D slice animation
 fig_1d, ax1 = plt.subplots(figsize=(9, 4.5))
 
 line_rho, = ax1.plot([], [], 'b-',  lw=1.8, label=r'$\rho(x, y=0.5)$')
@@ -164,7 +193,7 @@ def update_1d(n):
     line_rho.set_data(x_centers, rho[:, j_mid])
     line_u.set_data(x_centers, u[:, j_mid])
     line_p.set_data(x_centers, p[:, j_mid])
-    ax1.set_title(f"shock tube snippet primitive vals at t~{times[n]:.2f}", fontsize=12)
+    ax1.set_title(f"shock tube primitive vals at t~{times[n]:.4f}", fontsize=12)
     return line_rho, line_u, line_p
 
 ani_1d = animation.FuncAnimation(fig_1d, update_1d, frames=len(prims), interval=40, blit=False)
@@ -174,9 +203,8 @@ if SAVE_OUTPUTS:
     ani_1d.save(gif_1d_path, writer='pillow', fps=FPS)
     print(f"Saved animation: {gif_1d_path}")
 
-#snippet of shock tube at tf
+# Snapshot at final time
 rho_f, u_f, _, p_f = prims[-1]
-
 fig_snap, ax_snap = plt.subplots(figsize=(9, 4.5))
 ax_snap.plot(x_centers, rho_f[:, j_mid], 'b-',  lw=1.8, label=r'$\rho(x, y=0.5)$')
 ax_snap.plot(x_centers, u_f[:, j_mid],   'r--', lw=1.8, label=r'$u(x, y=0.5)$')
@@ -188,17 +216,15 @@ ax_snap.set_xlabel('x', fontsize=11)
 ax_snap.set_ylabel(f'Primitive vals HLLC t={times[-1]:.4f}', fontsize=11)
 ax_snap.grid(True, linestyle=":", alpha=0.6)
 ax_snap.legend(loc='center right', fontsize=11)
-ax_snap.set_title(f"shock tube snippet primitive vals at t~{times[-1]:.1f}", fontsize=12)
+ax_snap.set_title(f"shock tube snippet primitive vals at t~{times[-1]:.4f}", fontsize=12)
 
 fig_snap.tight_layout()
-fig_snap.savefig(os.path.join(outdir, "shock_tube_1d_snippet.png"), dpi=300)
-
 if SAVE_OUTPUTS:
     snap_path = os.path.join(outdir, "shock_tube_1d_snippet.png")
     fig_snap.savefig(snap_path, dpi=300)
     print(f"Saved figure: {snap_path}")
 
-#2D multi-panel animation of primitive vals
+# 2D multi-panel animation of primitive vals
 fig_2d, axes = plt.subplots(2, 2, figsize=(10, 5))
 fig_2d.subplots_adjust(hspace=0.4, wspace=0.3)
 

@@ -4,6 +4,7 @@
 #include <memory>
 #include <cstdint>
 #include <array>
+#include <functional>
 #include "hydro_config.hpp"
 
 /*
@@ -53,30 +54,6 @@ struct RefinementRegion{
 
 class Mesh;
 
-//quadtree node class managing recursive domain subdivision and leaf collection for SMR/AMR
-class MeshBlockTree{
-public:
-  MeshBlockTree(Mesh* mesh, MeshBlockTree* parent, LogicalLocation loc);
-
-  bool IsLeaf() const { return children_[0] == nullptr; }
-  const LogicalLocation& GetLocation() const { return loc_; }
-
-  void Refine();
-  void Derefine();
-  void RefineRegion(const RegionSize& root_domain,
-                    int nx1_blocks_root, int nx2_blocks_root,
-                    Real x1min, Real x1max,
-                    Real x2min, Real x2max,
-                    int target_level);
-  void CollectLeaves(std::vector<LogicalLocation>& out) const;
-
-private:
-  Mesh* mesh_;
-  MeshBlockTree* parent_;
-  LogicalLocation loc_;
-  std::array<std::unique_ptr<MeshBlockTree>, 4> children_; //quadtree quadrants
-};
-
 //face direction enumerations (X-minus, X-plus, Y-minus, Y-plus)
 enum class FaceDir{ XM = 0, XP = 1, YM = 2, YP = 3 };
 //neighbor relationship levels for ghost zone exchange and refluxing consistency
@@ -88,6 +65,7 @@ struct NeighborBlock{
   NeighborLevel level;
   bool periodic_wrap;
 };
+
 
 //represents an active computational block containing local cell data (=local grid) and physical boundaries
 class MeshBlock{
@@ -119,6 +97,40 @@ public:
   }
 };
 
+//FOR AMR:
+using RefinementCriterion = std::function<bool(const MeshBlock& block, const View4D& data, const View3D& rho_init)>;
+using DerefinementCriterion = std::function<bool(const MeshBlock& block, const View4D& data, const View3D& rho_init)>;
+
+//quadtree node class managing recursive domain subdivision and leaf collection for SMR/AMR
+class MeshBlockTree{
+public:
+  MeshBlockTree(Mesh* mesh, MeshBlockTree* parent, LogicalLocation loc);
+
+  bool IsLeaf() const { return children_[0] == nullptr; }
+  const LogicalLocation& GetLocation() const { return loc_; }
+
+  void Refine();
+  void Derefine();
+  void RefineRegion(const RegionSize& root_domain,
+                    int nx1_blocks_root, int nx2_blocks_root,
+                    Real x1min, Real x1max,
+                    Real x2min, Real x2max,
+                    int target_level);
+  void CollectLeaves(std::vector<LogicalLocation>& out) const;
+  //AMR part: dynamic eval hook
+  void EvaluateDynamicRefinement(const RefinementCriterion& criterion, const View4D& data,
+                                 const View3D& rho_init, int max_level);
+  void EvaluateDynamicDerefinement(const DerefinementCriterion& criterion, const View4D& data,
+                                   const View3D& rho_init, Real derefine_threshold);
+
+private:
+  Mesh* mesh_;
+  MeshBlockTree* parent_;
+  LogicalLocation loc_;
+  std::array<std::unique_ptr<MeshBlockTree>, 4> children_; //quadtree quadrants
+};
+
+
 //initialization structure holding global domain layout parameters and configuration inputs
 struct MeshInputs {
     RegionSize domain;
@@ -135,6 +147,16 @@ public:
   explicit Mesh(const MeshInputs& in);
 
   void BuildTree();
+  
+  //dynamic AMR update wrapper
+  void UpdateDynamicMesh(const RefinementCriterion& refine_crit,
+                         const DerefinementCriterion& derefine_crit,
+                         int max_level, Real derefine_threshold);
+  void CaptureInitialState();
+  View3D get_rho_init_view() { return rho_init_view_; };
+  void TransferSolution(const std::vector<std::unique_ptr<MeshBlock>>& old_blocks, 
+                        const View4D& old_data);
+
   void CreateMeshBlocks();
   void SetupNeighbors();
   void SyncNeighborTablesDevice();
@@ -144,6 +166,8 @@ public:
   const std::vector<std::unique_ptr<MeshBlock>>& blocks() const { return blocks_; }
 
   //Kokkos Device View accessors for solvers and kernels
+  View1D get_block_dx1_view(){ return block_dx1_view_; }
+  View1D get_block_dx2_view(){ return block_dx2_view_;}
   View4D get_data_view(){ return data_view_; }
   View4D get_data_next_view(){ return data_next_view_; }
   View4D get_flux_view(){ return flux_view_; }
@@ -166,6 +190,8 @@ private:
   std::vector<std::unique_ptr<MeshBlock>> blocks_;
 
   //double-buffered device memory pool & tables
+  View1D block_dx1_view_;
+  View1D block_dx2_view_;
   View4D data_view_;
   View4D data_next_view_;
   View4D flux_view_;
@@ -175,10 +201,16 @@ private:
   IntView2D block_parity_;
 
   //host mirror tables used to sync connectivity maps down to device views
+  HostView1D host_block_dx1_;
+  HostView1D host_block_dx2_;
   HostIntView2D host_neighbor_gid_;
   HostIntView2D host_neighbor_level_;
   HostIntView2D host_neighbor_gid2_;
   HostIntView2D host_block_parity_;
+
+  //for the criterion
+  View3D rho_init_view_; //stores initial density field [max_blocks, total_cells_i, total_cells_j]
+  HostView3D host_rho_init_;
 
   RegionSize BlockSizeFromLocation(const LogicalLocation& loc) const;
 
