@@ -1,5 +1,4 @@
 #include "mesh.hpp"
-#include <iterator>
 
 /*
  * Adaptive Mesh Refinement (AMR) quadtree implementation
@@ -32,34 +31,24 @@ void MeshBlockTree::Derefine(){
 
 //recursively evaluates spatial intersection between the current node's bounding box
 //and a specified refinement region, triggering subdivision if the target level is not yet met
-void MeshBlockTree::RefineRegion(const RegionSize& root_domain,
-                               int nx1_blocks_root, int nx2_blocks_root,
-                               double x1min, double x1max,
-                               double x2min, double x2max,
-                               int target_level) {
+void MeshBlockTree::RefineRegion(Real x1min, Real x1max,
+                                 Real x2min, Real x2max,
+                                 int target_level) {
 
   if(loc_.level >= target_level) return;
 
-  //calculate physical coordinate boundaries for the current tree node
-  double dom_w1 = root_domain.x1max - root_domain.x1min;
-  double dom_w2 = root_domain.x2max - root_domain.x2min;
-  std::int64_t n1_at_level = static_cast<std::int64_t>(nx1_blocks_root) << loc_.level;
-  std::int64_t n2_at_level = static_cast<std::int64_t>(nx2_blocks_root) << loc_.level;
-  double bx1min = root_domain.x1min + dom_w1*(double)loc_.lx1/(double)n1_at_level;
-  double bx1max = root_domain.x1min + dom_w1*(double)(loc_.lx1 + 1)/(double)n1_at_level;
-  double bx2min = root_domain.x2min + dom_w2*(double)loc_.lx2/(double)n2_at_level;
-  double bx2max = root_domain.x2min + dom_w2*(double)(loc_.lx2 + 1)/(double)n2_at_level;
+  //physical coordinate boundaries for the current tree node
+  RegionSize bs = mesh_->BlockSizeFromLocation(loc_);
 
   //check for spatial bounding box overlap with the requested refinement zone
-  bool overlaps = (bx1min < x1max) && (bx1max > x1min) &&
-                  (bx2min < x2max) && (bx2max > x2min);
+  bool overlaps = (bs.x1min < x1max) && (bs.x1max > x1min) &&
+                  (bs.x2min < x2max) && (bs.x2max > x2min);
   if(!overlaps) return;
 
   //if overlapping and currently a leaf, perform refinement and recurse into children
   if(IsLeaf()) Refine();
   for (auto& c : children_){
-    c->RefineRegion(root_domain, nx1_blocks_root, nx2_blocks_root,
-                    x1min, x1max, x2min, x2max, target_level);
+    c->RefineRegion(x1min, x1max, x2min, x2max, target_level);
   }
 }
 
@@ -73,7 +62,7 @@ void MeshBlockTree::CollectLeaves(std::vector<LogicalLocation>& out) const {
 }
 
 //recursively evaluates a dynamic refinement criterion across the quadtree
-void MeshBlockTree::EvaluateDynamicRefinement(const RefinementCriterion& criterion, const View4D& data,
+void MeshBlockTree::EvaluateDynamicRefinement(const BlockCriterion& criterion, const View4D& data,
                                               const View3D& rho_init, int max_level){
   if(!IsLeaf()){
     //if it's already an internal node -> recurse into children
@@ -94,8 +83,7 @@ void MeshBlockTree::EvaluateDynamicRefinement(const RefinementCriterion& criteri
       break;
     }
   }
-  if(actual_slot_id == -1) return; // Leaf not active yet
-  //
+  if(actual_slot_id == -1) return; //leaf not active yet
   RegionSize sz = mesh_->BlockSizeFromLocation(loc_);
   MeshBlock temp_block(actual_slot_id, actual_slot_id, loc_, sz, mesh_->inputs().nghost);
 
@@ -110,7 +98,7 @@ void MeshBlockTree::EvaluateDynamicRefinement(const RefinementCriterion& criteri
 }
 
 //evaluates derefinement bottom-up across the quadtree
-void MeshBlockTree::EvaluateDynamicDerefinement(const DerefinementCriterion& criterion, 
+void MeshBlockTree::EvaluateDynamicDerefinement(const BlockCriterion& criterion, 
                                                 const View4D& data, const View3D& rho_init,
                                                 Real derefine_threshold) {
   if (IsLeaf()) return; //leaf nodes cannot be derefined
@@ -150,8 +138,8 @@ void MeshBlockTree::EvaluateDynamicDerefinement(const DerefinementCriterion& cri
       RegionSize sz = mesh_->BlockSizeFromLocation(c->GetLocation());
       MeshBlock temp_block(child_slot_id, child_slot_id, c->GetLocation(), sz, mesh_->inputs().nghost);
       
-      //If even ONE child still exceeds the derefine threshold, do NOT derefine
-      if(criterion(temp_block, data, rho_init)){
+      //criterion returns true for a quiet block -> if even ONE child is not quiet, do NOT derefine
+      if(!criterion(temp_block, data, rho_init)){
         safe_to_derefine = false;
         break;
       }

@@ -1,9 +1,5 @@
 #include "mesh.hpp"
-#include "Kokkos_CheckUsage.hpp"
-#include "Kokkos_Core_fwd.hpp"
-#include "Kokkos_Macros.hpp"
-#include "traits/Kokkos_IterationPatternTrait.hpp"
-#include <iterator>
+#include "slope_limiters.hpp"
 #include <stdexcept>
 #include <algorithm>
 
@@ -22,6 +18,12 @@ Mesh::Mesh(const MeshInputs& in) : in_(in){
     throw std::invalid_argument("Mesh: block size must be positive");
   if(in_.domain.nx1 % in_.nx1_block != 0 || in_.domain.nx2 % in_.nx2_block != 0)
     throw std::invalid_argument("Mesh: root grid cell counts must be divisible by MeshBlock size");
+  //prolongation/restriction map 2 fine cells onto 1 coarse cell -> block sizes must be even
+  if(in_.nx1_block % 2 != 0 || in_.nx2_block % 2 != 0)
+    throw std::invalid_argument("Mesh: MeshBlock size must be even for refinement");
+  //reconstruction stencil needs 2 ghosts, fine->coarse ghost fill needs 2*nghost fine cells
+  if(in_.nghost < 2 || 2*in_.nghost > std::min(in_.nx1_block, in_.nx2_block))
+    throw std::invalid_argument("Mesh: need 2 <= nghost <= min(nx1_block, nx2_block)/2");
 
   nx1_blocks_root_ = in_.domain.nx1/in_.nx1_block;
   nx2_blocks_root_ = in_.domain.nx2/in_.nx2_block;
@@ -86,8 +88,70 @@ void Mesh::BuildTree(){
 
   for(const auto& reg : in_.refine_regions){
     for(auto& root : roots_){
-      root->RefineRegion(in_.domain, nx1_blocks_root_, nx2_blocks_root_,
-                         reg.x1min, reg.x1max, reg.x2min, reg.x2max, reg.level);
+      root->RefineRegion(reg.x1min, reg.x1max, reg.x2min, reg.x2max, reg.level);
+    }
+  }
+
+  BalanceTree();
+}
+
+MeshBlockTree* Mesh::FindNode(const LogicalLocation& loc) const {
+  std::int64_t r1 = loc.lx1 >> loc.level;
+  std::int64_t r2 = loc.lx2 >> loc.level;
+  MeshBlockTree* node = roots_[r2*nx1_blocks_root_ + r1].get(); //roots are stored j-major (see BuildTree)
+  for(int l = 1; l <= loc.level && !node->IsLeaf(); ++l){
+    int bit1 = (int)((loc.lx1 >> (loc.level - l)) & 1);
+    int bit2 = (int)((loc.lx2 >> (loc.level - l)) & 1);
+    node = node->Child(bit1 | (bit2 << 1));
+  }
+  return node;
+}
+
+bool Mesh::NeedsBalanceRefinement(const LogicalLocation& loc) const {
+  std::int64_t n1 = static_cast<std::int64_t>(nx1_blocks_root_) << loc.level;
+  std::int64_t n2 = static_cast<std::int64_t>(nx2_blocks_root_) << loc.level;
+
+  for(int fi = 0; fi < 4; ++fi){
+    FaceDir face = static_cast<FaceDir>(fi);
+    bool xface = (face == FaceDir::XM || face == FaceDir::XP);
+    int shift = (face == FaceDir::XP || face == FaceDir::YP) ? +1 : -1;
+
+    //same-level location across this face, wrapped for periodic directions
+    LogicalLocation nb = loc;
+    std::int64_t& lx = xface ? nb.lx1 : nb.lx2;
+    std::int64_t n = xface ? n1 : n2;
+    bool periodic = xface ? in_.periodic_x1 : in_.periodic_x2;
+    lx += shift;
+    if(lx < 0 || lx >= n){
+      if(!periodic) continue; //physical boundary
+      lx = (lx + n) % n;
+    }
+
+    //a coarser or same-level leaf over there is fine
+    MeshBlockTree* node = FindNode(nb);
+    if(node->GetLocation().level < loc.level || node->IsLeaf()) continue;
+
+    //same-level node is refined: its two children facing us must be leaves
+    for(int q = 0; q < 4; ++q){
+      int qx = q & 1, qy = (q >> 1) & 1;
+      bool facing = xface ? (qx == (shift > 0 ? 0 : 1)) : (qy == (shift > 0 ? 0 : 1));
+      if(facing && !node->Child(q)->IsLeaf()) return true;
+    }
+  }
+  return false;
+}
+
+void Mesh::BalanceTree(){
+  bool changed = true;
+  while(changed){
+    changed = false;
+    std::vector<LogicalLocation> leaves;
+    for(auto& root : roots_) root->CollectLeaves(leaves);
+    for(const auto& loc : leaves){
+      if(NeedsBalanceRefinement(loc)){
+        FindNode(loc)->Refine();
+        changed = true;
+      }
     }
   }
 }
@@ -210,7 +274,7 @@ void Mesh::SetupNeighbors(){
   SyncNeighborTablesDevice();
 }
 
-//changed meshblock sync logic uses gid2 for bookkeeping
+//meshblock sync logic uses gid2 for bookkeeping
 //synchronizes host neighbor topology maps, secondary finer slots, and parity flags down to Kokkos device views.
 void Mesh::SyncNeighborTablesDevice(){
   for(size_t b = 0; b < blocks_.size(); ++b){
@@ -233,6 +297,9 @@ void Mesh::SyncNeighborTablesDevice(){
       host_neighbor_level_(b, f) = static_cast<int>(lvl);
 
       if(lvl == NeighborLevel::Finer){
+        if(blocks_[b]->neighbors[f].size() != 2)
+          throw std::runtime_error("SyncNeighborTablesDevice: expected 2 finer neighbors per face (2:1 balance violated)");
+        host_neighbor_gid_(b, f) = -1;
         bool xface = (f == (int)FaceDir::XM || f == (int)FaceDir::XP);
         for(const auto& nb : blocks_[b]->neighbors[f]){
           const auto& bloc = blocks_[nb.gid]->loc;
@@ -256,14 +323,6 @@ Real MeshBlock::x1v(int i) const {
 }
 Real MeshBlock::x2v(int j) const {
   return block_size.x2min + (j - js + 0.5) * dx2();
-}
-
-//KOKKOS inline minmod slope limiter for slope-limited AMR prolongation
-KOKKOS_INLINE_FUNCTION Real minmod_limiter(Real a, Real b) {
-  if (a * b > 0.0) {
-    return (a > 0.0) ? fmin(a, b) : fmax(a, b);
-  }
-  return 0.0;
 }
 
 //parallel Kokkos kernel executing ghost zone data exchanges across Same, Coarser, and Finer block boundaries
@@ -315,6 +374,7 @@ void ExchangeGhostZones(Mesh& mesh){
       } 
       else if(lvl == static_cast<int>(NeighborLevel::Coarser)){
         //slope-limited linear prolongation from coarser neighbor grids
+        //fine ghost layers g = 0,1 both lie inside the first coarse cell -> coarse index g/2
         int half_N = N/2;
         int half = xface ? parity(a_slot, 1) : parity(a_slot, 0);
         int tk = half * half_N + t / 2;
@@ -323,47 +383,47 @@ void ExchangeGhostZones(Mesh& mesh){
         int min_idx = xface ? js : is;
         int max_idx = xface ? je : ie;
         int c_idx = min_idx + tk;
-        int c_left  = fmax(min_idx, c_idx - 1);
-        int c_right = fmin(max_idx, c_idx + 1);
+        int c_left  = Kokkos::max(min_idx, c_idx - 1);
+        int c_right = Kokkos::min(max_idx, c_idx + 1);
 
         //subcell offset relative to the coarse cell center (-0.25 or +0.25)
         Real sub_offset = (t % 2 == 0) ? -0.25 : 0.25;
 
         for(int g = 0; g < nghost; ++g){
           if(face == FaceDir::XP){
-            int coarse_i = is + g;
+            int coarse_i = is + g/2;
             for(size_t k = 0; k < NVAR; ++k) {
               Real q_center = data(b_slot, coarse_i, c_idx, k);
               Real q_left   = data(b_slot, coarse_i, c_left, k);
               Real q_right  = data(b_slot, coarse_i, c_right, k);
-              Real slope    = minmod_limiter(q_center - q_left, q_right - q_center);
+              Real slope    = minmod(q_center - q_left, q_right - q_center);
               data(a_slot, ie + 1 + g, js + t, k) = q_center + sub_offset * slope;
             }
           }else if(face == FaceDir::XM){
-            int coarse_i = ie - g;
+            int coarse_i = ie - g/2;
             for(size_t k = 0; k < NVAR; ++k) {
               Real q_center = data(b_slot, coarse_i, c_idx, k);
               Real q_left   = data(b_slot, coarse_i, c_left, k);
               Real q_right  = data(b_slot, coarse_i, c_right, k);
-              Real slope    = minmod_limiter(q_center - q_left, q_right - q_center);
+              Real slope    = minmod(q_center - q_left, q_right - q_center);
               data(a_slot, is - 1 - g, js + t, k) = q_center + sub_offset * slope;
             }
           }else if(face == FaceDir::YP){
-            int coarse_j = js + g;
+            int coarse_j = js + g/2;
             for(size_t k = 0; k < NVAR; ++k) {
               Real q_center = data(b_slot, c_idx, coarse_j, k);
               Real q_left   = data(b_slot, c_left, coarse_j, k);
               Real q_right  = data(b_slot, c_right, coarse_j, k);
-              Real slope    = minmod_limiter(q_center - q_left, q_right - q_center);
+              Real slope    = minmod(q_center - q_left, q_right - q_center);
               data(a_slot, is + t, je + 1 + g, k) = q_center + sub_offset * slope;
             }
           }else if(face == FaceDir::YM){
-            int coarse_j = je - g;
+            int coarse_j = je - g/2;
             for(size_t k = 0; k < NVAR; ++k) {
               Real q_center = data(b_slot, c_idx, coarse_j, k);
               Real q_left   = data(b_slot, c_left, coarse_j, k);
               Real q_right  = data(b_slot, c_right, coarse_j, k);
-              Real slope    = minmod_limiter(q_center - q_left, q_right - q_center);
+              Real slope    = minmod(q_center - q_left, q_right - q_center);
               data(a_slot, is + t, js - 1 - g, k) = q_center + sub_offset * slope;
             }
           }
@@ -377,23 +437,25 @@ void ExchangeGhostZones(Mesh& mesh){
         int tb = 2*local_t;
         int b_slot_f = (half == 0) ? b_slot : n_gid2(a_slot, fi);
 
+        //each coarse ghost cell covers 2x2 fine cells: normal indices 2g, 2g+1 and tangential tb, tb+1
         for(int g = 0; g < nghost; ++g){
+          int fn0 = 2*g, fn1 = 2*g + 1;
           if(face == FaceDir::XP){
             for(size_t k = 0; k < NVAR; ++k)
-              data(a_slot, ie + 1 + g, js + t, k) = 0.5*(data(b_slot_f, is + g, js + tb, k) +
-                                                         data(b_slot_f, is + g, js + tb + 1, k));
+              data(a_slot, ie + 1 + g, js + t, k) = 0.25*(data(b_slot_f, is + fn0, js + tb, k) + data(b_slot_f, is + fn0, js + tb + 1, k) +
+                                                          data(b_slot_f, is + fn1, js + tb, k) + data(b_slot_f, is + fn1, js + tb + 1, k));
           }else if(face == FaceDir::XM){
             for(size_t k = 0; k < NVAR; ++k)
-              data(a_slot, is - 1 - g, js + t, k) = 0.5*(data(b_slot_f, ie - g, js + tb, k) +
-                                                         data(b_slot_f, ie - g, js + tb + 1, k));
+              data(a_slot, is - 1 - g, js + t, k) = 0.25*(data(b_slot_f, ie - fn0, js + tb, k) + data(b_slot_f, ie - fn0, js + tb + 1, k) +
+                                                          data(b_slot_f, ie - fn1, js + tb, k) + data(b_slot_f, ie - fn1, js + tb + 1, k));
           }else if(face == FaceDir::YP){
             for(size_t k = 0; k < NVAR; ++k)
-              data(a_slot, is + t, je + 1 + g, k) = 0.5*(data(b_slot_f, is + tb, js + g, k) +
-                                                         data(b_slot_f, is + tb + 1, js + g, k));
+              data(a_slot, is + t, je + 1 + g, k) = 0.25*(data(b_slot_f, is + tb, js + fn0, k) + data(b_slot_f, is + tb + 1, js + fn0, k) +
+                                                          data(b_slot_f, is + tb, js + fn1, k) + data(b_slot_f, is + tb + 1, js + fn1, k));
           }else if(face == FaceDir::YM){
             for(size_t k = 0; k < NVAR; ++k)
-              data(a_slot, is + t, js - 1 - g, k) = 0.5*(data(b_slot_f, is + tb, je - g, k) +
-                                                         data(b_slot_f, is + tb + 1, je - g, k));
+              data(a_slot, is + t, js - 1 - g, k) = 0.25*(data(b_slot_f, is + tb, je - fn0, k) + data(b_slot_f, is + tb + 1, je - fn0, k) +
+                                                          data(b_slot_f, is + tb, je - fn1, k) + data(b_slot_f, is + tb + 1, je - fn1, k));
           }
         }
       }
@@ -450,14 +512,15 @@ void ApplyReflux(Mesh& mesh, Real dt){
 
       for(size_t k = 0; k < NVAR; ++k){
         Real f_eff = 0.5*(flux(b_slot, opp, tb, k) + flux(b_slot, opp, tb + 1, k));
-        data(a_slot, ai, aj, k) += sign*(dt/d)*(flux(a_slot, fi, t_idx, k) - f_eff);
+        //corner cells get corrected by two faces at once -> atomic
+        Kokkos::atomic_add(&data(a_slot, ai, aj, k), sign*(dt/d)*(flux(a_slot, fi, t_idx, k) - f_eff));
       }
     }
   );
 }
 
-void Mesh::UpdateDynamicMesh(const RefinementCriterion& refine_crit,
-                             const DerefinementCriterion& derefine_crit,
+void Mesh::UpdateDynamicMesh(const BlockCriterion& refine_crit,
+                             const BlockCriterion& derefine_crit,
                              int max_level, Real derefine_treshold){
   for(auto& root : roots_){
     root->EvaluateDynamicRefinement(refine_crit, data_view_, rho_init_view_, max_level);
@@ -466,6 +529,9 @@ void Mesh::UpdateDynamicMesh(const RefinementCriterion& refine_crit,
   for(auto& root : roots_){
     root->EvaluateDynamicDerefinement(derefine_crit, data_view_, rho_init_view_, derefine_treshold);
   }
+
+  //re-refines anything the passes above left unbalanced (also undoes derefinements that would break 2:1)
+  BalanceTree();
 
   CreateMeshBlocks();
   SetupNeighbors();
@@ -497,7 +563,7 @@ void Mesh::TransferSolution(const std::vector<std::unique_ptr<MeshBlock>>& old_b
   int nx1 = in_.nx1_block;
   int nx2 = in_.nx2_block;
 
-  // Helper lambda to find an old block by its logical location
+  //helper lambda to find an old block by its logical location
   auto find_old_block = [&](const LogicalLocation& target_loc) -> int{
     for(size_t i = 0; i < old_blocks.size(); ++i){
       if(old_blocks[i]->loc == target_loc){
@@ -507,12 +573,12 @@ void Mesh::TransferSolution(const std::vector<std::unique_ptr<MeshBlock>>& old_b
     return -1;
   };
 
-  // Loop over all newly created active blocks
+  //loop over all newly created active blocks
   for(size_t new_slot = 0; new_slot < blocks_.size(); ++new_slot){
     MeshBlock& new_b = *blocks_[new_slot];
     LogicalLocation new_loc = new_b.loc;
 
-    // Case 1: Exact match (Block didn't change level or position)
+    //case 1: exact match (block didn't change level or position)
     int old_slot = find_old_block(new_loc);
     if(old_slot != -1){
       Kokkos::parallel_for(
@@ -527,11 +593,11 @@ void Mesh::TransferSolution(const std::vector<std::unique_ptr<MeshBlock>>& old_b
       continue;
     }
 
-    // Case 2: Refinement / Prolongation (Parent exists in old blocks, new block is a child)
+    //case 2: refinement / prolongation (parent exists in old blocks, new block is a child)
     LogicalLocation parent_loc = new_loc.Parent();
     int old_parent_slot = find_old_block(parent_loc);
     if(old_parent_slot != -1){
-      // Determine child quadrant parity/offsets based on lx1 and lx2
+      //determine child quadrant parity/offsets based on lx1 and lx2
       int half_x1 = new_loc.lx1 & 1; // 0 = left half, 1 = right half
       int half_x2 = new_loc.lx2 & 1; // 0 = bottom half, 1 = top half
 
@@ -539,7 +605,7 @@ void Mesh::TransferSolution(const std::vector<std::unique_ptr<MeshBlock>>& old_b
         "TransferProlongation",
         Kokkos::MDRangePolicy<Kokkos::Rank<2>>({nghost, nghost}, {nghost + nx1, nghost + nx2}),
         KOKKOS_LAMBDA(int i, int j) {
-          // Map local fine cell (i, j) to coarse parent cell coordinates
+          //map local fine cell (i, j) to coarse parent cell coordinates
           int local_i = i - nghost;
           int local_j = j - nghost;
 
@@ -548,23 +614,27 @@ void Mesh::TransferSolution(const std::vector<std::unique_ptr<MeshBlock>>& old_b
           int coarse_i = nghost + coarse_local_i;
           int coarse_j = nghost + coarse_local_j;
 
-          // Simple linear/subcell prolongation mapping (matching your ghost zone style)
+          //minmod-limited linear prolongation (same style as the ghost zones), fine cell centers sit at
+          //+-0.25 coarse cells -> the 4 children average back to the parent value (conservative).
+          //coarse_i +- 1 may be a parent ghost cell, those were filled before old_data was copied
           Real sub_offset_i = (local_i%2 == 0) ? -0.25 : 0.25;
           Real sub_offset_j = (local_j%2 == 0) ? -0.25 : 0.25;
 
           for (size_t k = 0; k < NVAR; ++k) {
             Real q_center = old_data(old_parent_slot, coarse_i, coarse_j, k);
-            // Apply spatial interpolation corrections using neighbor values if needed, 
-            // or fallback cleanly to the coarse cell value to ensure monotonicity:
-            new_data(new_slot, i, j, k) = q_center; 
+            Real slope_i = minmod(q_center - old_data(old_parent_slot, coarse_i - 1, coarse_j, k),
+                                  old_data(old_parent_slot, coarse_i + 1, coarse_j, k) - q_center);
+            Real slope_j = minmod(q_center - old_data(old_parent_slot, coarse_i, coarse_j - 1, k),
+                                  old_data(old_parent_slot, coarse_i, coarse_j + 1, k) - q_center);
+            new_data(new_slot, i, j, k) = q_center + sub_offset_i*slope_i + sub_offset_j*slope_j;
           }
         }
       );
       continue;
     }
 
-    // Case 3: Derefinement / Restriction (4 Children merge into this new coarse block)
-    // Find all 4 children in old blocks whose parent is new_loc:
+    //case 3: derefinement / restriction (4 children merge into this new coarse block)
+    //find all 4 children in old blocks whose parent is new_loc:
     bool found_all_children = true;
     int old_child_slots[4];
     for(int q = 0; q < 4; ++q){

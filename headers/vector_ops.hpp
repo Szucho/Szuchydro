@@ -1,6 +1,5 @@
 #pragma once
 
-#include <array>
 #include <cstddef>
 #include "hydro_config.hpp"
 
@@ -20,17 +19,18 @@ namespace VecOps{
   }
 
   KOKKOS_INLINE_FUNCTION
-  Vec4 mul(double s, const Vec4& v){
+  Vec4 mul(Real s, const Vec4& v){
     return Vec4{s * v[0], s * v[1], s * v[2], s * v[3]};
   }
 
-  KOKKOS_INLINE_FUNCTION
-  Vec4 operator+(const Vec4& a, const Vec4& b){ return add(a, b); }
-
-  KOKKOS_INLINE_FUNCTION
-  Vec4 operator-(const Vec4& a, const Vec4& b){ return sub(a, b); }
-
-  KOKKOS_INLINE_FUNCTION
-  Vec4 operator*(double s, const Vec4& v){ return mul(s, v); }
-
 } // namespace VecOps
+
+//operators live next to Vec4 (global namespace) so they are found without "using namespace VecOps"
+KOKKOS_INLINE_FUNCTION
+Vec4 operator+(const Vec4& a, const Vec4& b){ return VecOps::add(a, b); }
+
+KOKKOS_INLINE_FUNCTION
+Vec4 operator-(const Vec4& a, const Vec4& b){ return VecOps::sub(a, b); }
+
+KOKKOS_INLINE_FUNCTION
+Vec4 operator*(Real s, const Vec4& v){ return VecOps::mul(s, v); }

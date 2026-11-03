@@ -81,13 +81,14 @@ BCType parseBC(const std::string& s){
 //just some initial conditions
 void init_cond(Mesh& mesh, const SimParams& par){
   View4D data = mesh.get_data_view();
-  int n_active = mesh.num_active_blocks();
   Real gamma = par.gamma;
   Real xmin = par.xmin;
   Real xmax = par.xmax;
   std::string profile = par.gas_profile;
   Real rho0 = par.gas_rho0;
   Real p0 = par.gas_p0;
+  Real u0 = par.gas_u0;
+  Real v0 = par.gas_v0;
   int nghost = mesh.inputs().nghost;
 
   for(auto& bptr : mesh.blocks()){
@@ -100,9 +101,9 @@ void init_cond(Mesh& mesh, const SimParams& par){
       Kokkos::parallel_for("InitUniform", Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {total_i, total_j}),
         KOKKOS_LAMBDA(int i, int j) {
           data(b_slot, i, j, 0) = rho0;
-          data(b_slot, i, j, 1) = rho0*par.gas_u0;
-          data(b_slot, i, j, 2) = rho0*par.gas_v0;
-          data(b_slot, i, j, 3) = p0/(gamma - 1.0) + 0.5*rho0*(par.gas_u0*par.gas_u0 + par.gas_v0*par.gas_v0);
+          data(b_slot, i, j, 1) = rho0*u0;
+          data(b_slot, i, j, 2) = rho0*v0;
+          data(b_slot, i, j, 3) = p0/(gamma - 1.0) + 0.5*rho0*(u0*u0 + v0*v0);
         }
       );
     }else if(profile == "Sod_x"){
@@ -110,11 +111,13 @@ void init_cond(Mesh& mesh, const SimParams& par){
       Real rho_R = rho0/8.0, p_R = 0.1*p0, u_R = 0.0, v_R = 0.0;
       Real x_mid = 0.5 * (xmin + xmax);
       int is = b.is; //offset to map cell index to physical coordinates
+      Real x1min = b.block_size.x1min;
+      Real dx1 = b.dx1();
 
       //initialize across the ENTIRE block including ghosts so no cell is left with NaN/zeros
       Kokkos::parallel_for("InitSod", Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {total_i, total_j}),
         KOKKOS_LAMBDA(int i, int j) {
-          Real x = b.block_size.x1min + (i - is + 0.5)*b.dx1();
+          Real x = x1min + (i - is + 0.5)*dx1;
           Real rho = (x < x_mid) ? rho_L : rho_R;
           Real p   = (x < x_mid) ? p_L   : p_R;
           Real u   = (x < x_mid) ? u_L   : u_R;

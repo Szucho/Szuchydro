@@ -1,4 +1,4 @@
-#pragma once
+#praga once
 
 #include <cmath>
 #include <algorithm>
@@ -12,7 +12,7 @@
 
  Modified on 21.09.2026:
   - Renamed file to slope_limiters.hpp for project consistency.
-  - Ported state vectors to Kokkos::Array<double, 4> (Vec4).
+  - Ported state vectors to the Vec4 struct (hydro_config.hpp).
   - Added KOKKOS_INLINE_FUNCTION decorators for CPU/GPU parallel execution.
 
  state vector Q = [rho, rho*u, rho*v, rho*e_tot] 
@@ -65,11 +65,9 @@ Vec4 sigma_van_leer(const Vec4& Qim1, const Vec4& Qi, const Vec4& Qip1, Real dk)
  - added Van Leer, minmod slope limiters
 
  Modified on 21.09.2026:
- - Replaced dynamic Vector with Kokkos::Array<double, 4> (Vec4).
+ - Replaced dynamic Vector with the Vec4 struct (hydro_config.hpp).
  - Added KOKKOS_INLINE_FUNCTION for device compilation.
 */
-
-using namespace VecOps;
 
 //minmod(a,b) = b if a*b>0, |a| > |b|
 //             = a if a*b>0, |a| <= |b|
@@ -77,17 +75,17 @@ using namespace VecOps;
 KOKKOS_INLINE_FUNCTION
 static Real minmod(Real a, Real b){
   if(a*b < 0.0) return 0.0;
-  else if (std::abs(a) > std::abs(b)) return b;
+  else if (Kokkos::abs(a) > Kokkos::abs(b)) return b;
   else return a;
 }
 
-//minmod(a,b) = a if a*b>0, |a| > |b|
+//maxmod(a,b) = a if a*b>0, |a| > |b|
 //             = b if a*b>0, |a| <= |b|
 //             = 0 if a*b<0
 KOKKOS_INLINE_FUNCTION
 static Real maxmod(Real a, Real b){
   if(a*b < 0.0) return 0.0;
-  else if (std::abs(a) > std::abs(b)) return a;
+  else if (Kokkos::abs(a) > Kokkos::abs(b)) return a;
   else return b;
 }
 
@@ -111,7 +109,7 @@ Vec4 sigma_superbee(const Vec4& Qim1, const Vec4& Qi, const Vec4& Qip1, Real dk)
 }
 
 KOKKOS_INLINE_FUNCTION
-Real minmod_one(double qim1, double qi, double qip1, Real dk){
+Real minmod_one(Real qim1, Real qi, Real qip1, Real dk){
   Real sL = (qi - qim1)/dk;
   Real sR = (qip1 - qi)/dk;
   return minmod(sL, sR); //reuses existing minmod(a,b)

@@ -11,7 +11,7 @@
  Bertalan Szuchovszky 26.02.2026
  
  Modified on 21.09.2026:
-  - Ported state vectors to zero-allocation Kokkos::Array<double, 4> (Vec4).
+  - Ported state vectors to the zero-allocation Vec4 struct (hydro_config.hpp).
   - Added KOKKOS_INLINE_FUNCTION decorators to facilitate execution on host and device backends.
   - Consolidated header includes for Modern CMake / Kokkos integration.
 
@@ -37,8 +37,6 @@
 
 */
 
-using namespace VecOps;
-
 struct Primitive_Vals{
   double rho, u, v, p, cs;
 };
@@ -53,11 +51,13 @@ static Primitive_Vals QtoPrim(const Vec4& Q, double gamma){
   //Q[3] = rho e_tot = rho(e_th + 0.5(u^2 + v^2)), e_th = 1/(gamma-1)k_BT/mu m_p
   //p = rho k_BT/mu m_p ideal gas law -> p = (gamma-1)*e_th = (gamma-1)rho(e_tot-0.5(u^2+v^2))
   q.p = (gamma - 1.0)*(Q[3] - q.rho*0.5*(q.u*q.u + q.v*q.v));
-  q.cs = std::sqrt(gamma*q.p/q.rho);
 
   if(q.rho < 0.0 || q.p < 0.0){
-    throw std::invalid_argument("Density or pressure is negative");
+    //exceptions are host-only: still catchable in main on the Serial backend, abort on device
+    KOKKOS_IF_ON_HOST((throw std::invalid_argument("Density or pressure is negative");))
+    KOKKOS_IF_ON_DEVICE((Kokkos::abort("Density or pressure is negative");))
   }
+  q.cs = Kokkos::sqrt(gamma*q.p/q.rho);
 
   return q;
 }
@@ -84,8 +84,8 @@ struct lambdas {
 KOKKOS_INLINE_FUNCTION
 static lambdas WavecX(const Primitive_Vals& L, const Primitive_Vals& R){
   //Toro 10.48
-  double SL = std::min(L.u - L.cs, R.u - R.cs); //lambda_{-} = u-cs but let it be the min of these
-  double SR = std::max(L.u + L.cs, R.u + R.cs); //lambda_{+} = u+cs and the max of these
+  double SL = Kokkos::min(L.u - L.cs, R.u - R.cs); //lambda_{-} = u-cs but let it be the min of these
+  double SR = Kokkos::max(L.u + L.cs, R.u + R.cs); //lambda_{+} = u+cs and the max of these
 
   //Toro eq. 10.36
   double Sstar = (R.p - L.p + L.rho*L.u*(SL - L.u) - R.rho*R.u*(SR - R.u))/(L.rho*(SL - L.u) - R.rho*(SR - R.u));

@@ -97,9 +97,10 @@ public:
   }
 };
 
-//FOR AMR:
-using RefinementCriterion = std::function<bool(const MeshBlock& block, const View4D& data, const View3D& rho_init)>;
-using DerefinementCriterion = std::function<bool(const MeshBlock& block, const View4D& data, const View3D& rho_init)>;
+//FOR AMR: per-block criterion
+//refinement:   returns true if the block should be refined
+//derefinement: returns true if the block is quiet enough to be merged
+using BlockCriterion = std::function<bool(const MeshBlock& block, const View4D& data, const View3D& rho_init)>;
 
 //quadtree node class managing recursive domain subdivision and leaf collection for SMR/AMR
 class MeshBlockTree{
@@ -108,19 +109,18 @@ public:
 
   bool IsLeaf() const { return children_[0] == nullptr; }
   const LogicalLocation& GetLocation() const { return loc_; }
+  MeshBlockTree* Child(int q) const { return children_[q].get(); }
 
   void Refine();
   void Derefine();
-  void RefineRegion(const RegionSize& root_domain,
-                    int nx1_blocks_root, int nx2_blocks_root,
-                    Real x1min, Real x1max,
+  void RefineRegion(Real x1min, Real x1max,
                     Real x2min, Real x2max,
                     int target_level);
   void CollectLeaves(std::vector<LogicalLocation>& out) const;
   //AMR part: dynamic eval hook
-  void EvaluateDynamicRefinement(const RefinementCriterion& criterion, const View4D& data,
+  void EvaluateDynamicRefinement(const BlockCriterion& criterion, const View4D& data,
                                  const View3D& rho_init, int max_level);
-  void EvaluateDynamicDerefinement(const DerefinementCriterion& criterion, const View4D& data,
+  void EvaluateDynamicDerefinement(const BlockCriterion& criterion, const View4D& data,
                                    const View3D& rho_init, Real derefine_threshold);
 
 private:
@@ -147,10 +147,12 @@ public:
   explicit Mesh(const MeshInputs& in);
 
   void BuildTree();
+  //refines leaves until face-neighbor levels differ by at most 1 (2:1 balance)
+  void BalanceTree();
   
   //dynamic AMR update wrapper
-  void UpdateDynamicMesh(const RefinementCriterion& refine_crit,
-                         const DerefinementCriterion& derefine_crit,
+  void UpdateDynamicMesh(const BlockCriterion& refine_crit,
+                         const BlockCriterion& derefine_crit,
                          int max_level, Real derefine_threshold);
   void CaptureInitialState();
   View3D get_rho_init_view() { return rho_init_view_; };
@@ -174,7 +176,6 @@ public:
   IntView2D get_neighbor_gid_view(){ return neighbor_gid_; }
   IntView2D get_neighbor_level_view(){ return neighbor_level_; }
 
-  //changed
   IntView2D get_neighbor_gid2_view(){ return neighbor_gid2_; }
   IntView2D get_block_parity_view(){ return block_parity_; }
 
@@ -213,6 +214,10 @@ private:
   HostView3D host_rho_init_;
 
   RegionSize BlockSizeFromLocation(const LogicalLocation& loc) const;
+  //deepest existing tree node containing loc (may be a coarser leaf)
+  MeshBlockTree* FindNode(const LogicalLocation& loc) const;
+  //true if a face neighbor of the leaf at loc is 2+ levels finer
+  bool NeedsBalanceRefinement(const LogicalLocation& loc) const;
 
   friend class MeshBlockTree;
 };

@@ -16,9 +16,7 @@
 #include "slope_limiters.hpp"
 #include "hydro_io.hpp"
 
-using namespace VecOps;
-
-//CFL time step calculation (GPU/CPU Parallel Reduction)
+//CFL time step calculation (GPU/CPU parallel reduction)
 Real compute_cfl_dt(Mesh& mesh, Real gamma, Real cfl_max){
   int n_active = mesh.num_active_blocks();
   if(n_active == 0) return 1.0;
@@ -30,14 +28,8 @@ Real compute_cfl_dt(Mesh& mesh, Real gamma, Real cfl_max){
   int is = nghost, ie = nghost + nx1 - 1;
   int js = nghost, je = nghost + nx2 - 1;
 
-  Kokkos::View<Real* [2], Kokkos::HostSpace> h_block_dx("h_block_dx", n_active);
-  const auto& blocks = mesh.blocks();
-  for (int b = 0; b < n_active; ++b) {
-    h_block_dx(b, 0) = blocks[b]->dx1();
-    h_block_dx(b, 1) = blocks[b]->dx2();
-  }
-  Kokkos::View<Real* [2]> d_block_dx("d_block_dx", n_active);
-  Kokkos::deep_copy(d_block_dx, h_block_dx);
+  View1D block_dx1 = mesh.get_block_dx1_view();
+  View1D block_dx2 = mesh.get_block_dx2_view();
 
   Real max_wave_speed = 0.0;
 
@@ -45,8 +37,8 @@ Real compute_cfl_dt(Mesh& mesh, Real gamma, Real cfl_max){
     "ComputeCFL",
     Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0, is, js}, {n_active, ie + 1, je + 1}),
     KOKKOS_LAMBDA(const int b, const int i, const int j, Real& local_max){
-      Real dx1 = d_block_dx(b, 0);
-      Real dx2 = d_block_dx(b, 1);
+      Real dx1 = block_dx1(b);
+      Real dx2 = block_dx2(b);
 
       Vec4 q_cell;
       for(size_t k = 0; k < NVAR; ++k){
@@ -57,9 +49,9 @@ Real compute_cfl_dt(Mesh& mesh, Real gamma, Real cfl_max){
       Real u = q_cell[1]/rho;
       Real v = q_cell[2]/rho;
       Real p = (gamma - 1.0)*(q_cell[3] - rho*0.5*(u*u + v*v));
-      Real cs = std::sqrt(gamma*p/rho);
+      Real cs = Kokkos::sqrt(gamma*p/rho);
 
-      Real speed = (std::abs(u) + cs)/dx1 + (std::abs(v) + cs)/dx2;
+      Real speed = (Kokkos::abs(u) + cs)/dx1 + (Kokkos::abs(v) + cs)/dx2;
       if(speed > local_max) local_max = speed;
     },
     Kokkos::Max<Real>(max_wave_speed)
@@ -83,22 +75,16 @@ void step_hydro_solver(Mesh& mesh, Real dt, Real gamma){
   int is = nghost, ie = nghost + nx1 - 1;
   int js = nghost, je = nghost + nx2 - 1;
 
-  Kokkos::View<Real* [2], Kokkos::HostSpace> h_block_dx("h_block_dx", n_active);
-  const auto& blocks = mesh.blocks();
-  for (int b = 0; b < n_active; ++b) {
-    h_block_dx(b, 0) = (blocks[b]->block_size.x1max - blocks[b]->block_size.x1min) / blocks[b]->block_size.nx1;
-    h_block_dx(b, 1) = (blocks[b]->block_size.x2max - blocks[b]->block_size.x2min) / blocks[b]->block_size.nx2;
-  }
-  Kokkos::View<Real* [2]> d_block_dx("d_block_dx", n_active);
-  Kokkos::deep_copy(d_block_dx, h_block_dx);
+  View1D block_dx1 = mesh.get_block_dx1_view();
+  View1D block_dx2 = mesh.get_block_dx2_view();
 
   Kokkos::parallel_for(
     "StepHydroSolver",
     Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0, is, js}, {n_active, ie + 1, je + 1}),
     KOKKOS_LAMBDA(const int b, const int i, const int j){
 
-      Real dx = d_block_dx(b, 0);
-      Real dy = d_block_dx(b, 1);
+      Real dx = block_dx1(b);
+      Real dy = block_dx2(b);
 
       Vec4 qi, qim1, qim2, qip1, qip2;
       Vec4 qjm1, qjm2, qjp1, qjp2;
@@ -168,45 +154,66 @@ void step_hydro_solver(Mesh& mesh, Real dt, Real gamma){
 }
 
 
-//for conservation check
-double compute_total_mass(Mesh& mesh) {
-  double total_mass = 0.0;
+//for conservation check: volume integral of conserved variable k (0 = mass, 3 = energy)
+double compute_total(Mesh& mesh, size_t k) {
+  int n_active = mesh.num_active_blocks();
+  if(n_active == 0) return 0.0;
+
   View4D data = mesh.get_data_view();
-  for (const auto& blk_ptr : mesh.blocks()) {
-    const auto& blk = *blk_ptr;
-    int b = blk.slot_id;
-    Real dx = blk.dx1();
-    Real dy = blk.dx2();
-    Real cell_vol = dx * dy;
-    
-    // Sum over active cell indices [is, ie] x [js, je]
-    for (int i = blk.is; i <= blk.ie; ++i) {
-      for (int j = blk.js; j <= blk.je; ++j) {
-        total_mass += data(b, i, j, 0) * cell_vol; // rho is index 0
-      }
-    }
-  }
-  return total_mass;
+  View1D block_dx1 = mesh.get_block_dx1_view();
+  View1D block_dx2 = mesh.get_block_dx2_view();
+  int nghost = mesh.inputs().nghost;
+  int is = nghost, ie = nghost + mesh.inputs().nx1_block - 1;
+  int js = nghost, je = nghost + mesh.inputs().nx2_block - 1;
+
+  double total = 0.0;
+  //sum over active cell indices [is, ie] x [js, je]
+  Kokkos::parallel_reduce("ComputeTotal",
+    Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0, is, js}, {n_active, ie + 1, je + 1}),
+    KOKKOS_LAMBDA(const int b, const int i, const int j, double& local_sum){
+      local_sum += data(b, i, j, k) * block_dx1(b) * block_dx2(b);
+    },
+    total
+  );
+  return total;
 }
 
-double compute_total_energy(Mesh& mesh) {
-  double total_energy = 0.0;
-  View4D data = mesh.get_data_view();
-for (const auto& blk_ptr : mesh.blocks()) {
-    // const auto& blk_ptr = blk_ptr; // standard pointer
-    const auto& blk = *blk_ptr;
-    int b = blk.slot_id;
-    Real dx = blk.dx1();
-    Real dy = blk.dx2();
-    Real cell_vol = dx * dy;
-    
-    for (int i = blk.is; i <= blk.ie; ++i) {
-      for (int j = blk.js; j <= blk.je; ++j) {
-        total_energy += data(b, i, j, 3) * cell_vol; // E is index 3
-      }
-    }
-  }
-  return total_energy;
+//net outflow rate of conserved variable k through the physical domain walls,
+//integrated from the face fluxes the solver actually used in the last step
+double compute_boundary_outflow(Mesh& mesh, size_t k) {
+  int n_active = mesh.num_active_blocks();
+  if(n_active == 0) return 0.0;
+
+  View4D flux = mesh.get_flux_view();
+  IntView2D n_level = mesh.get_neighbor_level_view();
+  View1D block_dx1 = mesh.get_block_dx1_view();
+  View1D block_dx2 = mesh.get_block_dx2_view();
+  int nx1 = mesh.inputs().nx1_block;
+  int nx2 = mesh.inputs().nx2_block;
+
+  double outflow = 0.0;
+  Kokkos::parallel_reduce("ComputeBoundaryOutflow",
+    Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0, 0, 0}, {n_active, 4, Kokkos::max(nx1, nx2)}),
+    KOKKOS_LAMBDA(const int b, const int fi, const int t, double& local_sum){
+      if(n_level(b, fi) != static_cast<int>(NeighborLevel::PhysicalBoundary)) return;
+      bool xface = (fi == (int)FaceDir::XM || fi == (int)FaceDir::XP);
+      if(t >= (xface ? nx2 : nx1)) return;
+      Real face_len = xface ? block_dx2(b) : block_dx1(b);
+      Real sign = (fi == (int)FaceDir::XP || fi == (int)FaceDir::YP) ? +1.0 : -1.0; //outward normal
+      local_sum += sign * flux(b, fi, t, k) * face_len;
+    },
+    outflow
+  );
+  return outflow;
+}
+
+//relative central density gradient max(|d rho/dx|, |d rho/dy|)/rho at cell (i, j), used by the AMR criteria
+KOKKOS_INLINE_FUNCTION
+Real rel_density_gradient(const View4D& data, int b, int i, int j){
+  Real rho_ij = data(b, i, j, 0);
+  Real grad_x = Kokkos::abs(data(b, i + 1, j, 0) - data(b, i - 1, j, 0)) / (2.0 * rho_ij + 1e-12);
+  Real grad_y = Kokkos::abs(data(b, i, j + 1, 0) - data(b, i, j - 1, 0)) / (2.0 * rho_ij + 1e-12);
+  return Kokkos::max(grad_x, grad_y);
 }
 
 
@@ -250,13 +257,13 @@ int main(int argc, char* argv[]){
 
     //capturing initial density profile
     mesh.CaptureInitialState();
-    double initial_mass = compute_total_mass(mesh);
-    double initial_energy = compute_total_energy(mesh);
+    double initial_mass = compute_total(mesh, 0);
+    double initial_energy = compute_total(mesh, 3);
 
     Real refine_grad_threshold = 0.05;   // Refine if local density gradient is high
     Real derefine_grad_threshold = 0.01; // Derefine if local gradients are quiet
 
-    RefinementCriterion density_gradient_refine = [refine_grad_threshold](const MeshBlock& block,
+    BlockCriterion density_gradient_refine = [refine_grad_threshold](const MeshBlock& block,
                                                                           const View4D& data,
                                                                           const View3D& rho_init){
       int b = block.slot_id;
@@ -268,26 +275,14 @@ int main(int argc, char* argv[]){
       Kokkos::parallel_reduce("DensityGradientCheck",
         Kokkos::MDRangePolicy<Kokkos::Rank<2>>({is, js}, {ie + 1, je + 1}),
         KOKKOS_LAMBDA(int i, int j, bool& local_refine){
-          Real rho_ij = data(b, i, j, 0);
-          // Check gradients with immediate neighbors
-          Real rho_im = data(b, i - 1, j, 0);
-          Real rho_ip = data(b, i + 1, j, 0);
-          Real rho_jm = data(b, i, j - 1, 0);
-          Real rho_jp = data(b, i, j + 1, 0);
-
-          Real grad_x = std::abs(rho_ip - rho_im) / (2.0 * rho_ij + 1e-12);
-          Real grad_y = std::abs(rho_jp - rho_jm) / (2.0 * rho_ij + 1e-12);
-
-          if(grad_x > refine_grad_threshold || grad_y > refine_grad_threshold){
-            local_refine = true;
-          }
+          if(rel_density_gradient(data, b, i, j) > refine_grad_threshold) local_refine = true;
         },
         Kokkos::LOr<bool>(needs_refinement)
       );
       return needs_refinement;
     };
 
-    DerefinementCriterion density_gradient_derefine = [derefine_grad_threshold](const MeshBlock& block,
+    BlockCriterion density_gradient_derefine = [derefine_grad_threshold](const MeshBlock& block,
                                                                               const View4D& data,
                                                                               const View3D& rho_init){
       int b = block.slot_id;
@@ -299,18 +294,7 @@ int main(int argc, char* argv[]){
       Kokkos::parallel_reduce("DensityGradientDerefineCheck",
         Kokkos::MDRangePolicy<Kokkos::Rank<2>>({is, js}, {ie + 1, je + 1}),
         KOKKOS_LAMBDA(int i, int j, bool& local_quiet){
-          Real rho_ij = data(b, i, j, 0);
-          Real rho_im = data(b, i - 1, j, 0);
-          Real rho_ip = data(b, i + 1, j, 0);
-          Real rho_jm = data(b, i, j - 1, 0);
-          Real rho_jp = data(b, i, j + 1, 0);
-
-          Real grad_x = std::abs(rho_ip - rho_im) / (2.0 * rho_ij + 1e-12);
-          Real grad_y = std::abs(rho_jp - rho_jm) / (2.0 * rho_ij + 1e-12);
-
-          if(grad_x >= derefine_grad_threshold || grad_y >= derefine_grad_threshold){
-            local_quiet = false;
-          }
+          if(rel_density_gradient(data, b, i, j) >= derefine_grad_threshold) local_quiet = false;
         },
         Kokkos::LAnd<bool>(all_cells_quiet)
       );
@@ -324,6 +308,7 @@ int main(int argc, char* argv[]){
     int nx1_b = mesh.inputs().nx1_block;
     int nx2_b = mesh.inputs().nx2_block;
     int ng = mesh.inputs().nghost;
+    Real gamma = par.gamma;
 
     Kokkos::parallel_for("CheckStates",
       Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0, 0, 0}, {n_act, nx1_b + 2*ng, nx2_b + 2*ng}),
@@ -332,7 +317,7 @@ int main(int argc, char* argv[]){
         Real mom_u = data_check(b, i, j, 1);
         Real mom_v = data_check(b, i, j, 2);
         Real E = data_check(b, i, j, 3);
-        Real p = (1.4 - 1.0) * (E - 0.5 * (mom_u * mom_u + mom_v * mom_v) / (rho > 1e-12 ? rho : 1e-12));
+        Real p = (gamma - 1.0) * (E - 0.5 * (mom_u * mom_u + mom_v * mom_v) / (rho > 1e-12 ? rho : 1e-12));
         
         if (rho <= 0.0 || p <= 0.0){
           //this will print the exact block slot and cell coordinates causing the failure!
@@ -396,9 +381,7 @@ int main(int argc, char* argv[]){
                                  density_gradient_derefine,
                                  /* max_level = */ 3, /* derefine_thresh = */ derefine_grad_threshold);
 
-          //rebuild active block slots and block-neighbor maps
-          mesh.CreateMeshBlocks();
-          mesh.SetupNeighbors();
+          //(UpdateDynamicMesh already rebuilt the active block slots and neighbor maps)
 
           //map old states to new blocks (Direct, Prolongation, Restriction)
           mesh.TransferSolution(old_blocks, old_data);
@@ -407,14 +390,11 @@ int main(int argc, char* argv[]){
           //OTHERWISE UNSTABLE, DO NOT REMOVE
           ExchangeGhostZones(mesh);
           ApplyPhysicalBoundaryConditions(mesh, bc);
-
-          //also calculate cfl immediately!!! OTHERWISE UNSTABLE, DO NOT REMOVE
-          Real dt_cfl_new = compute_cfl_dt(mesh, par.gamma, 0.4);
-          dt = std::min(dt_cfl_new, tf - t);
         }
 
-        // Real dt_cfl = compute_cfl_dt(mesh, par.gamma, 0.4);
-        // dt = std::min(dt_cfl, tf - t);
+        //CFL every step (also right after regridding!!! OTHERWISE UNSTABLE, DO NOT REMOVE)
+        Real dt_cfl = compute_cfl_dt(mesh, par.gamma, 0.4);
+        dt = std::min(dt_cfl, tf - t);
 
         draw_progress(t, n == 0);
 
@@ -429,51 +409,9 @@ int main(int argc, char* argv[]){
         ExchangeGhostZones(mesh);
         ApplyPhysicalBoundaryConditions(mesh, bc);
 
-        for (const auto& blk_ptr : mesh.blocks()) {
-          const auto& blk = *blk_ptr;
-          int b = blk.slot_id;
-          Real dx = blk.dx1();
-          Real dy = blk.dx2();
-          Real face_area = dy; // 2D strip area per cell along x-face
-
-          auto data = mesh.get_data_view();
-
-          // Check if block touches the left domain boundary (xmin)
-          if (std::abs(blk.block_size.x1min - par.xmin) < 1e-12) {
-              double left_mass_flux = 0.0;
-              double left_energy_flux = 0.0;
-              int i = blk.is; // Leftmost active cell index
-              for (int j = blk.js; j <= blk.je; ++j) {
-                  Real rho = data(b, i, j, 0);
-                  Real mx  = data(b, i, j, 1);
-                  Real E   = data(b, i, j, 3);
-                  Real u   = mx / rho;
-                  
-                  left_mass_flux   += (rho * u) * face_area;
-                  left_energy_flux += (E * u + (par.gamma - 1.0)*(E - 0.5*rho*u*u)*u) * face_area;
-              }
-              cumulative_mass_loss -= left_mass_flux * dt;
-              cumulative_energy_loss -= left_energy_flux * dt;
-          }
-
-          // Check if block touches the right domain boundary (xmax)
-          if (std::abs(blk.block_size.x1max - par.xmax) < 1e-12) {
-              double right_mass_flux = 0.0;
-              double right_energy_flux = 0.0;
-              int i = blk.ie; // Rightmost active cell index
-              for (int j = blk.js; j <= blk.je; ++j) {
-                  Real rho = data(b, i, j, 0);
-                  Real mx  = data(b, i, j, 1);
-                  Real E   = data(b, i, j, 3);
-                  Real u   = mx / rho;
-                  
-                  right_mass_flux   += (rho * u) * face_area;
-                  right_energy_flux += (E * u + (par.gamma - 1.0)*(E - 0.5*rho*u*u)*u) * face_area;
-              }
-              cumulative_mass_loss += right_mass_flux * dt;
-              cumulative_energy_loss += right_energy_flux * dt;
-          }
-        }
+        //flux_view still holds this step's face fluxes (reflux and ghost exchange don't touch it)
+        cumulative_mass_loss   += compute_boundary_outflow(mesh, 0) * dt;
+        cumulative_energy_loss += compute_boundary_outflow(mesh, 3) * dt;
 
         n += 1;
         t += dt;
@@ -490,8 +428,8 @@ int main(int argc, char* argv[]){
       std::cout << "\nSimulation completed in " << n << " steps!\n";
       std::cout << "Output saved to " << par.outdir << "/grid.bin\n";
 
-      double final_mass = compute_total_mass(mesh);
-      double final_energy = compute_total_energy(mesh);
+      double final_mass = compute_total(mesh, 0);
+      double final_energy = compute_total(mesh, 3);
       
       double delta_mass_domain = std::abs(initial_mass - final_mass);
       double delta_energy_domain = std::abs(initial_energy - final_energy);
@@ -499,9 +437,6 @@ int main(int argc, char* argv[]){
       double expected_mass = initial_mass - cumulative_mass_loss;
       double expected_energy = initial_energy - cumulative_energy_loss;
 
-      std::cout << "\n==========================================================================\n";
-      std::cout << "                 EXACT C++ CONSERVATION COMPARISON REPORT                 \n";
-      std::cout << "==========================================================================\n";
       std::cout << std::scientific << std::setprecision(12);
       std::cout << "  Initial Mass M(t=0)      = " << initial_mass << "\n";
       std::cout << "  Final Mass M(t=tf)       = " << final_mass << "\n";
@@ -514,7 +449,6 @@ int main(int argc, char* argv[]){
       std::cout << "  Domain Drop |E0 - Ef|    = " << delta_energy_domain << "\n";
       std::cout << "  Net Boundary Loss (Flux) = " << std::abs(cumulative_energy_loss) << "\n";
       std::cout << "  Energy Discrepancy       = " << std::abs(final_energy - expected_energy) << "\n";
-      std::cout << "==========================================================================\n";
       std::cout << "RUNTIME: " << elapsed.count() << " seconds.\n";
     }catch(const std::exception& e){
       std::cerr << "\n[ERROR] Exception caught in simulation loop: " << e.what() << "\n";

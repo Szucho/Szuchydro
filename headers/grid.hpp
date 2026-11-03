@@ -14,7 +14,7 @@
  BoundaryCondition: sets the BCType, for Dirichlet we need Cell Q_fixed constant state vector
  GridBC: BC type at each grid wall
 
- The other 2 functions are defined in grid_setup.cpp
+ validateBC and ApplyPhysicalBoundaryConditions are defined in grid.cpp
  
 
  MODIFIED 12.05.2026
@@ -25,8 +25,5 @@
  -added KOKKOS to the mix
 */
 
-
-//4D View storing all mesh blocks: (block_slot, i, j, var)
-using MeshDataView = Kokkos::View<double****, Kokkos::LayoutRight, Kokkos::DefaultExecutionSpace::memory_space>;
 
 void validateBC(const GridBC& bc);
