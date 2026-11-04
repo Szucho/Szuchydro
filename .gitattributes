@@ -1,0 +1,8 @@
+#store all text files with LF endings and keep it OS independent from commits
+* text=auto eol=lf
+
+#dont touch anything else
+*.bin binary
+*.png binary
+*.mp4 binary
+*.gif binary
