@@ -13,6 +13,7 @@
 #include "hydro_config.hpp"
 #include "grid.hpp"
 #include "mesh.hpp"
+#include "disk_physics.hpp"
 
 /*
  Input / Output header for Kokkos AMR Hydro Simulation
@@ -43,12 +44,19 @@ struct SimParams {
   double gas_rho0, gas_p0, gas_u0, gas_v0; 
   //output
   std::string outdir;
+  int n_frames = 100; //number of snapshots written to grid.bin
+  //run control
+  bool use_amr = true; //false -> static mesh (SMR only)
+  double cfl = 0.4;
+  //disk r--z problem:
+  DiskParams disk;
 };
 
 //parameter and setup functions
 SimParams readParams(const std::string& filename);
 BCType parseBC(const std::string& s);
 void init_cond(Mesh& mesh, const SimParams& par);
+DiskModel BuildDiskModelFromParams(const SimParams& par);
 void setupOutputDir(const std::string& dir);
 void writeMetadata(const std::string& outdir, const SimParams& par);
 std::ofstream openGridFile(const std::string& outdir, Mesh& mesh);

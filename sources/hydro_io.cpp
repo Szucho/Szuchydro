@@ -66,6 +66,32 @@ SimParams readParams(const std::string& filename){ //reads in params.txt
   p.gas_v0      = getd("gas_v0");
   p.outdir      = get("outdir");
 
+  //optional keys (old params.txt files keep working this is for ppd)
+  auto optd = [&](const std::string& k, double def){ return has(k) ? getd(k) : def; };
+  auto opti = [&](const std::string& k, int def){ return has(k) ? geti(k) : def; };
+  p.n_frames = opti("n_frames", 100);
+  p.use_amr  = opti("use_amr", 1) != 0;
+  p.cfl      = optd("cfl", 0.4);
+  DiskParams& d = p.disk;
+  d.h_disk      = optd("h_disk", d.h_disk);
+  d.h_wind      = optd("h_wind", d.h_wind);
+  d.eta_tr      = optd("eta_tr", d.eta_tr);
+  d.q_D         = optd("q_D", d.q_D);
+  d.rho_floor   = optd("rho_floor", d.rho_floor);
+  d.p_floor     = optd("p_floor", d.p_floor);
+  d.beta_cool   = optd("beta_cool", d.beta_cool);
+  d.stir_nmodes = opti("stir_nmodes", d.stir_nmodes);
+  d.stir_amp    = optd("stir_amp", d.stir_amp);
+  d.stir_tcorr  = optd("stir_tcorr", d.stir_tcorr);
+  d.stir_damp   = optd("stir_damp", d.stir_damp);
+  d.stir_lmin   = optd("stir_lmin", d.stir_lmin);
+  d.stir_lmax   = optd("stir_lmax", d.stir_lmax);
+  d.stir_seed   = (unsigned)opti("stir_seed", (int)d.stir_seed);
+  d.wind_mach   = optd("wind_mach", d.wind_mach);
+  d.wind_angle  = optd("wind_angle", d.wind_angle);
+  d.wind_tau    = optd("wind_tau", d.wind_tau);
+  d.corona_tau  = optd("corona_tau", d.corona_tau);
+
   return p;
 }
 
@@ -75,8 +101,18 @@ BCType parseBC(const std::string& s){
   else if (s == "Closed")    return BCType::Closed;
   else if (s == "Periodic")  return BCType::Periodic;
   else if (s == "Dirichlet") return BCType::Dirichlet;
+  else if (s == "Outflow")   return BCType::Outflow;
   else throw std::invalid_argument("Unknown BC type: " + s);
 }
+
+
+//disk model with an |eta| table covering the whole domain incl. ghost cells
+DiskModel BuildDiskModelFromParams(const SimParams& par){
+  Real ymax_abs = std::max(std::abs(par.ymin), std::abs(par.ymax));
+  Real eta_max = 1.5*ymax_abs/par.xmin + 1.0;
+  return BuildDiskModel(par.disk, par.gas_rho0, eta_max);
+}
+
 
 //just some initial conditions
 void init_cond(Mesh& mesh, const SimParams& par){
@@ -90,6 +126,13 @@ void init_cond(Mesh& mesh, const SimParams& par){
   Real u0 = par.gas_u0;
   Real v0 = par.gas_v0;
   int nghost = mesh.inputs().nghost;
+
+  //does disk init cond found in disk_phycics.cpp
+  if(profile == "disk_Rz"){
+    InitDiskRz(mesh, BuildDiskModelFromParams(par), gamma);
+    return;
+  }
+
 
   for(auto& bptr : mesh.blocks()){
     const MeshBlock& b = *bptr;

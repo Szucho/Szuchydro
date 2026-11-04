@@ -8,6 +8,7 @@
 #include <chrono>
 #include <limits>
 #include <Kokkos_Core.hpp>
+#include <memory>
 
 #include "hydro_config.hpp"
 #include "grid.hpp"
@@ -15,6 +16,7 @@
 #include "hllc.hpp"
 #include "slope_limiters.hpp"
 #include "hydro_io.hpp"
+#include "disk_physics.hpp"
 
 //CFL time step calculation (GPU/CPU parallel reduction)
 Real compute_cfl_dt(Mesh& mesh, Real gamma, Real cfl_max){
@@ -255,6 +257,19 @@ int main(int argc, char* argv[]){
 
     init_cond(mesh, par);
 
+    const bool use_disk = (par.gas_profile == "disk_Rz");
+    DiskModel disk_model;
+    std::unique_ptr<StirringForce> stirring;
+    if(use_disk){
+      disk_model = BuildDiskModelFromParams(par);
+      stirring   = std::make_unique<StirringForce>(par.disk);
+    }
+
+    auto apply_bcs = [&](){
+      ApplyPhysicalBoundaryConditions(mesh, bc);
+      if(use_disk) ApplyDiskBoundaries(mesh, disk_model, par.gamma);
+    };
+
     //capturing initial density profile
     mesh.CaptureInitialState();
     double initial_mass = compute_total(mesh, 0);
@@ -302,7 +317,8 @@ int main(int argc, char* argv[]){
     };
 
     ExchangeGhostZones(mesh);
-    ApplyPhysicalBoundaryConditions(mesh, bc);
+    // ApplyPhysicalBoundaryConditions(mesh, bc);
+    apply_bcs();
     auto data_check = mesh.get_data_view();
     int n_act = mesh.num_active_blocks();
     int nx1_b = mesh.inputs().nx1_block;
@@ -333,7 +349,7 @@ int main(int argc, char* argv[]){
     Real dt = (tf - t0)/Nt;
 
     //CFL check
-    Real cfl = compute_cfl_dt(mesh, par.gamma, 0.4);
+    Real cfl = compute_cfl_dt(mesh, par.gamma, par.cfl);
     if (dt > cfl) {
       std::cout << "Warning: Initial dt=" << dt << " exceeds CFL limit=" << cfl << "\n";
       std::cout << "Forcing dt to safe CFL limit for step 1...\n";
@@ -343,7 +359,7 @@ int main(int argc, char* argv[]){
     Real t = t0;
     int n = 0;
 
-    Real t_save = (tf - t0)/100.0; 
+    Real t_save = (tf - t0)/par.n_frames; 
     Real t_next_save = t0;
 
     //progressbar
@@ -369,7 +385,7 @@ int main(int argc, char* argv[]){
     try{
       while(t < tf){
         //AMR part
-        if(n%5 == 0){
+        if(par.use_amr && n%5 == 0){
           std::vector<std::unique_ptr<MeshBlock>> old_blocks;
           for(auto& b : mesh.blocks()) old_blocks.push_back(std::make_unique<MeshBlock>(*b));
           
@@ -389,11 +405,12 @@ int main(int argc, char* argv[]){
           //populating ghost zones and boundaries for the new mesh layout immediately!!!
           //OTHERWISE UNSTABLE, DO NOT REMOVE
           ExchangeGhostZones(mesh);
-          ApplyPhysicalBoundaryConditions(mesh, bc);
+          // ApplyPhysicalBoundaryConditions(mesh, bc);
+          apply_bcs();
         }
 
         //CFL every step (also right after regridding!!! OTHERWISE UNSTABLE, DO NOT REMOVE)
-        Real dt_cfl = compute_cfl_dt(mesh, par.gamma, 0.4);
+        Real dt_cfl = compute_cfl_dt(mesh, par.gamma, par.cfl);
         dt = std::min(dt_cfl, tf - t);
 
         draw_progress(t, n == 0);
@@ -406,8 +423,13 @@ int main(int argc, char* argv[]){
 
         step_hydro_solver(mesh, dt, par.gamma);
         ApplyReflux(mesh, dt);
+        if(use_disk){
+          stirring -> Advance(dt);
+          AddDiskSourceTerms(mesh, disk_model, *stirring, dt, par.gamma);
+        }
         ExchangeGhostZones(mesh);
-        ApplyPhysicalBoundaryConditions(mesh, bc);
+        // ApplyPhysicalBoundaryConditions(mesh, bc);
+        apply_bcs();
 
         //flux_view still holds this step's face fluxes (reflux and ghost exchange don't touch it)
         cumulative_mass_loss   += compute_boundary_outflow(mesh, 0) * dt;

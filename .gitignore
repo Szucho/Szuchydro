@@ -3,3 +3,9 @@ __pycache__/
 scripts/__pycache__/
 Sod_shock_tube/
 Sod_shock_tube/grid.bin
+
+.cache/
+*_out/
+*.mp4
+*.git
+PPDanim/
