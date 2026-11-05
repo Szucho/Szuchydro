@@ -28,7 +28,7 @@ jobs:
         run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DSZ_NATIVE=OFF
 
       - name: build
-        run: cmake --build build -j "${nproc}"
+        run: cmake --build build -j "$(nproc)"
 
       - name: Run tests
         run: python3 tests/run_tests.py --exe build/szuchydro2d

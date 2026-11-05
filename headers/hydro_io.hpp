@@ -53,7 +53,7 @@ struct SimParams {
 
   //Sedov problem
   Real sedov_E = 1.0; 
-  Real sedov_r = 1.0;
+  Real sedov_r = 0.0;
 };
 
 //parameter and setup functions

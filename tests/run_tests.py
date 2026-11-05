@@ -38,7 +38,7 @@ def read_frames(path):
     frames = []
     with open(path, "rb") as f:
         while True:
-            h = f.read()
+            h = f.read(HS)
             if len(h) < HS:
                 break
             t, nb = struct.unpack(HDR, h)

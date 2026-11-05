@@ -142,7 +142,7 @@ void init_cond(Mesh& mesh, const SimParams& par){
   }
 
   Real sedov_r_dep = 0.0, sedov_p_in = 0.0; //for sedov but no need to have it inside loop
-  if(profile == "Sedov"){
+  if(profile == "sedov"){
     Real dx_base = (par.xmax - par.xmin)/par.Nx;
     sedov_r_dep = (par.sedov_r > 0.0) ? par.sedov_r : 3.0*dx_base; 
     Real xc = 0.5*(par.xmin + par.xmax), yc = 0.5*(par.ymin + par.ymax);
