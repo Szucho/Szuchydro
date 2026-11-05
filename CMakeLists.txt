@@ -10,7 +10,7 @@ if(WIN32 AND NOT CMAKE_GENERATOR)
   set(CMAKE_GENERATOR "MinGW Makefiles" CACHE INTERNAL "" FORCE)
 endif()
 
-project(Szuchydro-2D CXX)
+project(Szuchydro CXX)
 
 #Set C++ standard (Kokkos 5.0 requires C++20 minimum)
 set(CMAKE_CXX_STANDARD 20)
@@ -39,34 +39,23 @@ add_subdirectory(mesh)
 
 #sources will all be needed for the executable
 file(GLOB SOURCES "sources/*.cpp")
-add_executable(szuchydro2d ${SOURCES})
+add_executable(szuchydro ${SOURCES})
 
 #link headers to mesh static library
-target_include_directories(szuchydro2d PRIVATE
+target_include_directories(szuchydro PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/headers
 )
-target_link_libraries(szuchydro2d PRIVATE szuchydro_mesh)
+target_link_libraries(szuchydro PRIVATE szuchydro_mesh)
 
-# set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/builds)
-
-# add_executable(szuchydro2d ${SOURCES})
-
-#Compiler Flag Optimizations (-march=native)
 include(CheckCXXCompilerFlag)
 option(SZ_NATIVE "Optimize for the CPU of build machine (-march=native)" ON)
 check_cxx_compiler_flag("-march=native" COMPILER_SUPPORTS_MARCH_NATIVE)
 
 if(SZ_NATIVE AND COMPILER_SUPPORTS_MARCH_NATIVE)
-  target_compile_options(szuchydro2d PRIVATE
+  target_compile_options(szuchydro PRIVATE
     $<$<CONFIG:Release>:-march=native>
   )
 endif()
 
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/params.txt")
-  file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/params.txt" DESTINATION ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
-else()
-  message(WARNING "params.txt not found in root directory! Make sure it is placed alongside CMakeLists.txt.")
-endif()
-
 #Link Kokkos library
-target_link_libraries(szuchydro2d PRIVATE Kokkos::kokkos)
+target_link_libraries(szuchydro PRIVATE Kokkos::kokkos)

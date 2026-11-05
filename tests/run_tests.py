@@ -6,6 +6,8 @@ Physics problems checks:
     sod_uniform         Sod tube vs exact Riemann solution (L1 error) + conservation
     sod_smr             same with static refined band -> test refluxing
     sod_amr             same with adaptive refinement -> test AMR remap + refluxing
+    sod_amr_level2      AMR capped at amr_max_level 2 (tests AMR parameters)
+    invalid_params      bad input must stop with 'Parameter error' and an exit code 1
     sedov_uniform       2D Sedov-Taylor blast vs analytical solution + symmetry + conservation
     sedov_amr           same with AMR from coarse base grid (2D refinement in both directions)
     disk_equilibrium    disk_Rz without stirring/wind must stay in hydrostatic equilibrium
@@ -303,10 +305,18 @@ def test_case(exe, name, workdir):
     code, log, dt, outdir = run_case(exe, name, workdir)
     res.runtime = dt
     res.outdir = outdir
+
+    if name == "invalid_params": #this one is supposed to fail
+        res.check("non-zero exit code", code, code != 0, "!= 0")
+        found = "Parameter error" in log
+        res.check("'Parameter error' message", int(found), found, "= 1")
+        return res
+
     res.check("exit code", code, code == 0, "= 0")
     if code != 0:
         res.log_tail = "\n".join(log.replace("\r", "\n").splitlines()[-15:])
         return res
+
     bad = [l for l in log.replace("\r", "\n").splitlines() if "INVALID" in l or "ERROR" in l]
     res.check("no INVALID/ERROR in log", len(bad), not bad, "= 0")
     gfile = os.path.join(outdir, "grid.bin") if outdir else ""
@@ -327,6 +337,10 @@ def test_case(exe, name, workdir):
         check_sod(res, frames, gamma, l1_limit=8e-3)
         lv = max(b[0] for b in frames[-1][1])
         res.check("AMR refined (max level)", lv, lv >= 1, ">= 1")
+    elif name == "sod_amr_level2":
+        check_sod(res, frames, gamma, l1_limit=8e-3)
+        lv = max(b[0] for b in frames[-1][1])
+        res.check("max level over all snapshots", lv, lv == 2, "= 2")
     elif name == "sedov_uniform":
         check_sedov(res, frames, gamma, p_amb=1e-5, l1_limit=0.18)
     elif name == "sedov_amr":
@@ -353,8 +367,8 @@ def test_case(exe, name, workdir):
     return res
 
 #test cases
-ALL = ["sod_uniform", "sod_smr", "sod_amr", "sedov_uniform", "sedov_amr",
-       "disk_equilibrium", "disk_stirred"]
+ALL = ["sod_uniform", "sod_smr", "sod_amr", "sod_amr_level2", "sedov_uniform", "sedov_amr",
+       "disk_equilibrium", "disk_stirred", "invalid_params"]
 
 def main():
     ap = argparse.ArgumentParser(description="Szuchydro test suite")

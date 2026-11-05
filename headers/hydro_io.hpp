@@ -28,7 +28,7 @@
 //structure holding all simulation, grid, physics, and I/O parameters parsed from config files
 struct SimParams {
   //grid
-  Real Nx, Ny, Nt;
+  int Nx=0, Ny=0, Nt=0; //root grid cells, initial number of time steps (first dt guess)
   Real t0, tf;
   Real xmin, xmax, ymin, ymax;
   //refinement
@@ -47,6 +47,11 @@ struct SimParams {
   int n_frames = 100; //number of snapshots written to grid.bin
   //run control
   bool use_amr = true; //false -> static mesh (SMR only)
+  int max_blocks = 1024; //capacity of block arrays, memory is allocated for all of them
+  int amr_max_level = 3; //AMR never refines beyond this level
+  int amr_interval = 5;  //check refinement level every amr interval steps
+  Real amr_refine_tol = 0.05; //refine a block if the relative density jump exeeds this tolerance value
+  Real amr_derefine_tol = 0.01; //derefine if it stays below this everywhere
   Real cfl = 0.4;
   //disk r--z problem:
   DiskParams disk;

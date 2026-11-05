@@ -4,6 +4,7 @@
 #include "Serial/Kokkos_Serial_Parallel_Range.hpp"
 #include "mesh.hpp"
 #include <stdexcept>
+#include <string>
 
 /*
  * Here we handle input output
@@ -48,13 +49,13 @@ SimParams readParams(const std::string& filename){ //reads in params.txt
   auto geti = [&](const std::string& k){ return std::stoi(get(k)); };
 
   SimParams p; //just reading in all the other parameters
-  p.Nx   = getd("Nx");    p.Ny  = getd("Ny");   p.Nt  = getd("Nt");
+  p.Nx   = geti("Nx");    p.Ny  = geti("Ny");   p.Nt  = geti("Nt");
   p.t0   = getd("t0");    p.tf  = getd("tf");
   p.xmin = getd("xmin");  p.xmax = getd("xmax");
   p.ymin = getd("ymin");  p.ymax = getd("ymax");
   //refinement parameters
-  p.nx1_block = has("nx1_block") ? geti("nx1_block") : (int)p.Nx;
-  p.nx2_block = has("nx2_block") ? geti("nx2_block") : (int)p.Ny;
+  p.nx1_block = has("nx1_block") ? geti("nx1_block") : p.Nx;
+  p.nx2_block = has("nx2_block") ? geti("nx2_block") : p.Ny;
   p.refine_regions = std::move(refine_regions);
   //physics
   p.gamma = getd("gamma");
@@ -77,6 +78,11 @@ SimParams readParams(const std::string& filename){ //reads in params.txt
   p.n_frames = opti("n_frames", 100);
   p.use_amr  = opti("use_amr", 1) != 0;
   p.cfl      = optd("cfl", 0.4);
+  p.max_blocks = opti("max_blocks", p.max_blocks);
+  p.amr_max_level = opti("amr_max_level", p.amr_max_level);
+  p.amr_interval = opti("amr_interval", p.amr_interval);
+  p.amr_refine_tol = optd("amr_refine_tol", p.amr_refine_tol);
+  p.amr_derefine_tol = optd("amr_derefine_tol", p.amr_derefine_tol);
   p.sedov_E  = optd("sedov_E", p.sedov_E);
   p.sedov_r  = optd("sedov_r", p.sedov_r);
   DiskParams& d = p.disk;
@@ -99,6 +105,22 @@ SimParams readParams(const std::string& filename){ //reads in params.txt
   d.wind_tau    = optd("wind_tau", d.wind_tau);
   d.corona_tau  = optd("corona_tau", d.corona_tau);
   
+  //sanity checks
+  auto require = [](bool ok, const std::string& msg){
+    if(!ok) throw std::runtime_error("Parameter error: " + msg);
+  };
+  require(p.Nx > 0 && p.Ny > 0, "Nx and Ny must be larger than 0");
+  require(p.Nt > 0, "Nt must be larger than 0");
+  require(p.max_blocks >= 1, "max_blocks must be at least 1");
+  require(p.amr_max_level >= 1, "amr_max_level must be at least 1");
+  require(p.amr_interval >= 1, "amr_interval must be at least 1");
+  require(p.amr_derefine_tol < p.amr_refine_tol, "amr_derefine_tol must be smaller than amr_refine_tol (otherwise blocks flip-flop)");
+  if(p.use_amr){
+    for(const auto& r : p.refine_regions){
+      require(r.level <= p.amr_max_level, "a 'refine' line asks for level " + std::to_string(r.level)  + 
+                                          " but amr_max_level is " + std::to_string(p.amr_max_level));
+    }
+  }
 
   return p;
 }
@@ -242,8 +264,8 @@ void writeMetadata(const std::string& outdir, const SimParams& par){
       << "ymin "  << par.ymin  << "\n"
       << "ymax "  << par.ymax  << "\n"
       << "gamma " << par.gamma << "\n"
-      << "Nx "    << (int)par.Nx << "\n"
-      << "Ny "    << (int)par.Ny << "\n";
+      << "Nx "    << par.Nx << "\n"
+      << "Ny "    << par.Ny << "\n";
 }
 
 //grid.bin contains simulation data

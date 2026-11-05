@@ -1,0 +1,27 @@
+# Deliberately invalid input: derefine tolerance above the refine tolerance.
+# The run must stop immediately with "Parameter error" and a non-zero exit code.
+Nx 64
+Ny 16
+nx1_block 16
+nx2_block 16
+Nt 100
+t0 0.0
+tf 0.1
+xmin -1.0
+xmax 1.0
+ymin -0.125
+ymax 0.125
+gamma 1.4
+use_amr 1
+amr_refine_tol 0.01
+amr_derefine_tol 0.05
+bc_left Open
+bc_right Open
+bc_top Periodic
+bc_bottom Periodic
+gas_profile Sod_x
+gas_rho0 1.0
+gas_p0 1.0
+gas_u0 0.0
+gas_v0 0.0
+outdir invalid_params_out

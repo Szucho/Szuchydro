@@ -1,4 +1,5 @@
 #include <cmath>
+#include <exception>
 #include <iomanip>
 #include <ios>
 #include <iostream>
@@ -220,18 +221,19 @@ Real rel_density_gradient(const View4D& data, int b, int i, int j){
 
 
 int main(int argc, char* argv[]){
+  int exit_code = 0; //not zero if run fails so scripts and CI can tell
   Kokkos::initialize(argc, argv); //GPU accel
-  {
+  try{ //setup errors like bad params, invalid mesh end runs cleanly with exit code 1
     std::string param_file = (argc > 1) ? argv[1] : "params.txt"; //look for input file
     //reading and processing simulation parameters
     SimParams par = readParams(param_file);
 
     MeshInputs inputs;
-    inputs.domain = RegionSize{par.xmin, par.xmax, par.ymin, par.ymax, (int)par.Nx, (int)par.Ny};
+    inputs.domain = RegionSize{par.xmin, par.xmax, par.ymin, par.ymax, par.Nx, par.Ny};
     inputs.nx1_block = par.nx1_block;
     inputs.nx2_block = par.nx2_block;
     inputs.nghost = par.nghost;
-    inputs.max_blocks = 1024;
+    inputs.max_blocks = par.max_blocks;
     inputs.refine_regions = par.refine_regions;
 
     GridBC bc;
@@ -275,8 +277,8 @@ int main(int argc, char* argv[]){
     double initial_mass = compute_total(mesh, 0);
     double initial_energy = compute_total(mesh, 3);
 
-    Real refine_grad_threshold = 0.05;   // Refine if local density gradient is high
-    Real derefine_grad_threshold = 0.01; // Derefine if local gradients are quiet
+    Real refine_grad_threshold = par.amr_refine_tol;     //refine if local density gradient is high
+    Real derefine_grad_threshold = par.amr_derefine_tol; //derefine if local gradients are quiet
 
     BlockCriterion density_gradient_refine = [refine_grad_threshold](const MeshBlock& block,
                                                                           const View4D& data,
@@ -317,7 +319,6 @@ int main(int argc, char* argv[]){
     };
 
     ExchangeGhostZones(mesh);
-    // ApplyPhysicalBoundaryConditions(mesh, bc);
     apply_bcs();
     auto data_check = mesh.get_data_view();
     int n_act = mesh.num_active_blocks();
@@ -385,7 +386,7 @@ int main(int argc, char* argv[]){
     try{
       while(t < tf){
         //AMR part
-        if(par.use_amr && n%5 == 0){
+        if(par.use_amr && n%par.amr_interval == 0){
           std::vector<std::unique_ptr<MeshBlock>> old_blocks;
           for(auto& b : mesh.blocks()) old_blocks.push_back(std::make_unique<MeshBlock>(*b));
           
@@ -393,9 +394,7 @@ int main(int argc, char* argv[]){
           Kokkos::deep_copy(old_data, mesh.get_data_view());
 
           //run Tree Refinement & Derefinement
-          mesh.UpdateDynamicMesh(density_gradient_refine,
-                                 density_gradient_derefine,
-                                 /* max_level = */ 3, /* derefine_thresh = */ derefine_grad_threshold);
+          mesh.UpdateDynamicMesh(density_gradient_refine, density_gradient_derefine, par.amr_max_level, derefine_grad_threshold);
 
           //(UpdateDynamicMesh already rebuilt the active block slots and neighbor maps)
 
@@ -405,7 +404,6 @@ int main(int argc, char* argv[]){
           //populating ghost zones and boundaries for the new mesh layout immediately!!!
           //OTHERWISE UNSTABLE, DO NOT REMOVE
           ExchangeGhostZones(mesh);
-          // ApplyPhysicalBoundaryConditions(mesh, bc);
           apply_bcs();
         }
 
@@ -428,7 +426,6 @@ int main(int argc, char* argv[]){
           AddDiskSourceTerms(mesh, disk_model, *stirring, dt, par.gamma);
         }
         ExchangeGhostZones(mesh);
-        // ApplyPhysicalBoundaryConditions(mesh, bc);
         apply_bcs();
 
         //flux_view still holds this step's face fluxes (reflux and ghost exchange don't touch it)
@@ -474,9 +471,13 @@ int main(int argc, char* argv[]){
       std::cout << "RUNTIME: " << elapsed.count() << " seconds.\n";
     }catch(const std::exception& e){
       std::cerr << "\n[ERROR] Exception caught in simulation loop: " << e.what() << "\n";
+      exit_code = 1;
     }
+  }catch(const std::exception& e){
+    std::cerr << "\n[Error] " << e.what() << "\n";
+    exit_code = 1;
   }
   Kokkos::finalize();
 
-  return 0;
+  return exit_code;
 }

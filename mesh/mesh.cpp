@@ -2,6 +2,7 @@
 #include "slope_limiters.hpp"
 #include <stdexcept>
 #include <algorithm>
+#include <string>
 
 
 /*
@@ -175,7 +176,9 @@ void Mesh::CreateMeshBlocks(){
   for(auto& root : roots_) root->CollectLeaves(leaves);
 
   if(leaves.size() > static_cast<size_t>(in_.max_blocks)) {
-    throw std::runtime_error("Exceeded maximum allocated block capacity in View4D!");
+    throw std::runtime_error("Mesh needs " + std::to_string(leaves.size()) + 
+                             " blocks but max_blocks = " + std::to_string(in_.max_blocks) +
+                             ": increase max_blocks in the parameter file");
   }
 
   blocks_.clear();
