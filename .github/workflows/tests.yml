@@ -31,4 +31,4 @@ jobs:
         run: cmake --build build -j "$(nproc)"
 
       - name: Run tests
-        run: python3 tests/run_tests.py --exe build/szuchydro2d
+        run: python3 tests/run_tests.py --exe build/szuchydro

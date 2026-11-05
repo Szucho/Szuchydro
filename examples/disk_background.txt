@@ -2,7 +2,7 @@
 # Stylized look-alike of Fig. 1 of Huang & Bai (2026), not their physics.
 # Runtime: ~13 min on one core. Render with:
 #
-#   ./build/szuchydro2d examples/disk_background.txt
+#   ./build/szuchydro examples/disk_background.txt
 #   python3 scripts/animate_lic.py disk_out --tmin 80 --fps 20 -o disk.mp4
 #   python3 scripts/animate_lic.py disk_out --field vort --tmin 80 -o disk_vorticity.mp4
 

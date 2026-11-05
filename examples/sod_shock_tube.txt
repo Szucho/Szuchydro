@@ -1,7 +1,7 @@
 # Sod shock tube along x (Sod 1978). Compare with the exact Riemann solution
 # (tests/run_tests.py has one). Runtime: ~15 s on one core (AMR reaches level 3).
 #
-#   ./build/szuchydro2d examples/sod_shock_tube.txt
+#   ./build/szuchydro examples/sod_shock_tube.txt
 
 # --- grid: 512 x 16 cells, blocks of 16 x 16 ---
 Nx 512
@@ -22,6 +22,11 @@ n_frames 20        # snapshots written to grid.bin
 
 # --- mesh refinement ---
 use_amr 1          # 0 = static mesh (refine lines below still apply)
+# amr_max_level 3        # AMR never refines beyond this level
+# amr_refine_tol 0.05    # refine where the relative density jump between cells exceeds this
+# amr_derefine_tol 0.01  # derefine where it stays below this (must be < amr_refine_tol)
+# amr_interval 5         # check refinement every N steps
+# max_blocks 1024        # block capacity; memory is allocated for all of them up front
 # refine -0.25 0.5 -0.0625 0.0625 1
 
 # --- physics ---

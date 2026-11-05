@@ -14,12 +14,12 @@ Physics problems checks:
     disk_stirred        disk_Rz smoke test: finite, positive, sensible Mach numbers
 
 Bit-for-bit mode (local only):
-    before: python3 tests/run_tests.py --exe build/szuchydro2d --save-ref refs/
-    after:  python3 tests/run_tests.py --exe build/szuchydro2d --compare-ref refs/
+    before: python3 tests/run_tests.py --exe build/szuchydro --save-ref refs/
+    after:  python3 tests/run_tests.py --exe build/szuchydro --compare-ref refs/
 
 Usage:
-    all tests: python3 tests/run_tests.py --exe build/szuchydro2d
-    only names containing sod: python3 tests/run_tests.py --exe build/szuchydro2d -k sod
+    all tests: python3 tests/run_tests.py --exe build/szuchydro
+    only names containing sod: python3 tests/run_tests.py --exe build/szuchydro -k sod
 Exit code 0 = all passed, 1 = something failed (CI uses this)
 """
 
@@ -372,7 +372,7 @@ ALL = ["sod_uniform", "sod_smr", "sod_amr", "sod_amr_level2", "sedov_uniform", "
 
 def main():
     ap = argparse.ArgumentParser(description="Szuchydro test suite")
-    ap.add_argument("--exe", default="build/szuchydro2d", help="path to the executable")
+    ap.add_argument("--exe", default="build/szuchydro", help="path to the executable")
     ap.add_argument("-k", default="", help="only run tests whose name contains this")
     ap.add_argument("--keep", action="store_true", help="keep the run directory")
     ap.add_argument("--save-ref", metavar="DIR", help="store final-frame hashes (bit-for-bit mode)")

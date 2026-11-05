@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Fig. 1-style simplified animation (Huang & Bai 2026) for Szuchydro-2D grid.bin output:
+Fig. 1-style simplified animation (Huang & Bai 2026) for Szuchydro grid.bin output:
 line integral convolution (LIC) of the poloidal velocity, coloured by |v_p|/c_s
 (or by density, or by azimuthal vorticity), x1 = R and x2 = z.
 
@@ -222,7 +222,7 @@ class Renderer:
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Fig.1-style LIC animation of Szuchydro-2D output")
+    ap = argparse.ArgumentParser(description="Fig.1-style LIC animation of Szuchydro output")
     ap.add_argument("outdir", help="simulation output dir (contains grid.bin, meta.txt)")
     ap.add_argument("-o", "--out", nargs="+", default=["disk_lic.gif"],
                     help="one or more of .gif / .mp4 (or one .png with --still)")

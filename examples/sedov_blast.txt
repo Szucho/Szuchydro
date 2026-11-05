@@ -4,7 +4,7 @@
 # so r_s ~ 0.71 at t = 0.5. tests/run_tests.py has the full analytic profile.
 # Runtime: ~1 min on one core (finest level = 512^2 equivalent).
 #
-#   ./build/szuchydro2d examples/sedov_blast.txt
+#   ./build/szuchydro examples/sedov_blast.txt
 
 # --- grid ---
 Nx 64
@@ -25,6 +25,11 @@ n_frames 50
 
 # --- mesh: AMR follows the shock; start with fine cells at the centre ---
 use_amr 1
+# amr_max_level 3        # AMR never refines beyond this level
+# amr_refine_tol 0.05    # refine where the relative density jump between cells exceeds this
+# amr_derefine_tol 0.01  # derefine where it stays below this (must be < amr_refine_tol)
+# amr_interval 5         # check refinement every N steps
+# max_blocks 1024        # block capacity; memory is allocated for all of them up front
 refine -0.0625 0.0625 -0.0625 0.0625 3
 
 # --- physics ---
