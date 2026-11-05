@@ -53,9 +53,10 @@ target_link_libraries(szuchydro2d PRIVATE szuchydro_mesh)
 
 #Compiler Flag Optimizations (-march=native)
 include(CheckCXXCompilerFlag)
+option(SZ_NATIVE "Optimize for the CPU of build machine (-march=native)" ON)
 check_cxx_compiler_flag("-march=native" COMPILER_SUPPORTS_MARCH_NATIVE)
 
-if(COMPILER_SUPPORTS_MARCH_NATIVE)
+if(SZ_NATIVE AND COMPILER_SUPPORTS_MARCH_NATIVE)
   target_compile_options(szuchydro2d PRIVATE
     $<$<CONFIG:Release>:-march=native>
   )

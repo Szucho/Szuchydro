@@ -28,28 +28,32 @@
 //structure holding all simulation, grid, physics, and I/O parameters parsed from config files
 struct SimParams {
   //grid
-  double Nx, Ny, Nt;
-  double t0, tf;
-  double xmin, xmax, ymin, ymax;
+  Real Nx, Ny, Nt;
+  Real t0, tf;
+  Real xmin, xmax, ymin, ymax;
   //refinement
   int nx1_block = 0, nx2_block = 0;
   int nghost = 2;
   std::vector<RefinementRegion> refine_regions;
   //physics
-  double gamma;
+  Real gamma;
   //boundary conditions
   std::string bc_left, bc_right, bc_top, bc_bottom;
   //gas initial condition
   std::string gas_profile;
-  double gas_rho0, gas_p0, gas_u0, gas_v0; 
+  Real gas_rho0, gas_p0, gas_u0, gas_v0; 
   //output
   std::string outdir;
   int n_frames = 100; //number of snapshots written to grid.bin
   //run control
   bool use_amr = true; //false -> static mesh (SMR only)
-  double cfl = 0.4;
+  Real cfl = 0.4;
   //disk r--z problem:
   DiskParams disk;
+
+  //Sedov problem
+  Real sedov_E = 1.0; 
+  Real sedov_r = 1.0;
 };
 
 //parameter and setup functions
@@ -60,4 +64,4 @@ DiskModel BuildDiskModelFromParams(const SimParams& par);
 void setupOutputDir(const std::string& dir);
 void writeMetadata(const std::string& outdir, const SimParams& par);
 std::ofstream openGridFile(const std::string& outdir, Mesh& mesh);
-void writeFrame(std::ofstream& f, Mesh& mesh, double t);
+void writeFrame(std::ofstream& f, Mesh& mesh, Real t);

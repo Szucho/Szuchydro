@@ -1,4 +1,9 @@
 #include "hydro_io.hpp"
+#include "Kokkos_CheckUsage.hpp"
+#include "Kokkos_Macros.hpp"
+#include "Serial/Kokkos_Serial_Parallel_Range.hpp"
+#include "mesh.hpp"
+#include <stdexcept>
 
 /*
  * Here we handle input output
@@ -67,11 +72,13 @@ SimParams readParams(const std::string& filename){ //reads in params.txt
   p.outdir      = get("outdir");
 
   //optional keys (old params.txt files keep working this is for ppd)
-  auto optd = [&](const std::string& k, double def){ return has(k) ? getd(k) : def; };
+  auto optd = [&](const std::string& k, Real def){ return has(k) ? getd(k) : def; };
   auto opti = [&](const std::string& k, int def){ return has(k) ? geti(k) : def; };
   p.n_frames = opti("n_frames", 100);
   p.use_amr  = opti("use_amr", 1) != 0;
   p.cfl      = optd("cfl", 0.4);
+  p.sedov_E  = optd("sedov_E", p.sedov_E);
+  p.sedov_r  = optd("sedov_r", p.sedov_r);
   DiskParams& d = p.disk;
   d.h_disk      = optd("h_disk", d.h_disk);
   d.h_wind      = optd("h_wind", d.h_wind);
@@ -91,6 +98,7 @@ SimParams readParams(const std::string& filename){ //reads in params.txt
   d.wind_angle  = optd("wind_angle", d.wind_angle);
   d.wind_tau    = optd("wind_tau", d.wind_tau);
   d.corona_tau  = optd("corona_tau", d.corona_tau);
+  
 
   return p;
 }
@@ -133,6 +141,25 @@ void init_cond(Mesh& mesh, const SimParams& par){
     return;
   }
 
+  Real sedov_r_dep = 0.0, sedov_p_in = 0.0; //for sedov but no need to have it inside loop
+  if(profile == "Sedov"){
+    Real dx_base = (par.xmax - par.xmin)/par.Nx;
+    sedov_r_dep = (par.sedov_r > 0.0) ? par.sedov_r : 3.0*dx_base; 
+    Real xc = 0.5*(par.xmin + par.xmax), yc = 0.5*(par.ymin + par.ymax);
+    Real area = 0.0;
+    for(auto& bptr : mesh.blocks()){
+      const MeshBlock& b = *bptr;
+      for(int i=0; i<b.block_size.nx1; ++i){
+        for(int j=0; j<b.block_size.nx2; ++j){
+          Real x = b.block_size.x1min + (i + 0.5)*b.dx1() - xc;
+          Real y = b.block_size.x2min + (j + 0.5)*b.dx2() - yc;
+          if(x*x + y*y < sedov_r_dep*sedov_r_dep) area += b.dx1()*b.dx2();
+        }
+      }
+    }
+    if(area<=0.0) throw std::runtime_error("[SEDOV]: deposit radius smaller than a cell");
+    sedov_p_in = (gamma - 1.0)*par.sedov_E/area;
+  }
 
   for(auto& bptr : mesh.blocks()){
     const MeshBlock& b = *bptr;
@@ -173,6 +200,24 @@ void init_cond(Mesh& mesh, const SimParams& par){
           data(b_slot, i, j, 3) = E;
         }
       );
+    }else if(profile == "sedov"){
+      //uniform ambient medium + energy sedov_E deposited inside r<r_dep (pressure p_in)
+      int is = b.is, js = b.js;
+      Real x1min = b.block_size.x1min, x2min = b.block_size.x2min;
+      Real dx1 = b.dx1(), dx2 = b.dx2();
+      Real xc = 0.5*(par.xmin + par.xmax), yc = 0.5*(par.ymin + par.ymax);
+      Real r_dep = sedov_r_dep, p_in = sedov_p_in;
+      Kokkos::parallel_for("InitSedov", Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {total_i, total_j}),
+        KOKKOS_LAMBDA(int i, int j){
+          Real x = x1min + (i - is + 0.5)*dx1 - xc;  
+          Real y = x2min + (j - js + 0.5)*dx2 - yc;
+          Real p = (x*x + y*y < r_dep*r_dep) ? p0 + p_in : p0; //ambient + blast energy
+          data(b_slot, i, j, 0) = rho0;
+          data(b_slot, i, j, 1) = 0.0;
+          data(b_slot, i, j, 2) = 0.0;
+          data(b_slot, i, j, 3) = p/(gamma - 1.0);
+        }
+      );
     }else{
       throw std::runtime_error("Unknown gas_profile: " + profile);
     }
@@ -210,9 +255,10 @@ std::ofstream openGridFile(const std::string& outdir, Mesh& mesh){
 }
 
 //writing into grid.bin
-void writeFrame(std::ofstream& f, Mesh& mesh, double t){
+void writeFrame(std::ofstream& f, Mesh& mesh, Real t){
   //write timestamp
-  f.write(reinterpret_cast<const char*>(&t), sizeof(double));
+  const double t_out = t; //t is Real but this way it will always be a double in write out
+  f.write(reinterpret_cast<const char*>(&t_out), sizeof(double));
 
   //write active block count for this specific frame
   uint64_t nblocks = mesh.blocks().size();

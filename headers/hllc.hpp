@@ -38,11 +38,11 @@
 */
 
 struct Primitive_Vals{
-  double rho, u, v, p, cs;
+  Real rho, u, v, p, cs;
 };
 
 KOKKOS_INLINE_FUNCTION
-static Primitive_Vals QtoPrim(const Vec4& Q, double gamma){
+static Primitive_Vals QtoPrim(const Vec4& Q, Real gamma){
   Primitive_Vals q;
   q.rho = Q[0];
   q.u = Q[1]/q.rho; //rho u / rho
@@ -64,10 +64,10 @@ static Primitive_Vals QtoPrim(const Vec4& Q, double gamma){
 
 //flux in the x direction - Toro chapter 10
 KOKKOS_INLINE_FUNCTION
-static Vec4 xFlux(const Vec4& Q, double gamma){
+static Vec4 xFlux(const Vec4& Q, Real gamma){
   Primitive_Vals q = QtoPrim(Q, gamma);
-  double e_tot = Q[3]/q.rho;
-  double h_tot = e_tot + q.p/q.rho;
+  Real e_tot = Q[3]/q.rho;
+  Real h_tot = e_tot + q.p/q.rho;
   //Fx = (rho u, rho u^2 + p, rho u v, rho u h_tot)
   return Vec4{
     q.rho*q.u,
@@ -78,26 +78,26 @@ static Vec4 xFlux(const Vec4& Q, double gamma){
 }
 
 struct lambdas {
-  double lm, l0, lp; //lambda_{-}, lambda_{0}, lambda_{+} eigenvals of the Jacobi matrix
+  Real lm, l0, lp; //lambda_{-}, lambda_{0}, lambda_{+} eigenvals of the Jacobi matrix
 };
 
 KOKKOS_INLINE_FUNCTION
 static lambdas WavecX(const Primitive_Vals& L, const Primitive_Vals& R){
   //Toro 10.48
-  double SL = Kokkos::min(L.u - L.cs, R.u - R.cs); //lambda_{-} = u-cs but let it be the min of these
-  double SR = Kokkos::max(L.u + L.cs, R.u + R.cs); //lambda_{+} = u+cs and the max of these
+  Real SL = Kokkos::min(L.u - L.cs, R.u - R.cs); //lambda_{-} = u-cs but let it be the min of these
+  Real SR = Kokkos::max(L.u + L.cs, R.u + R.cs); //lambda_{+} = u+cs and the max of these
 
   //Toro eq. 10.36
-  double Sstar = (R.p - L.p + L.rho*L.u*(SL - L.u) - R.rho*R.u*(SR - R.u))/(L.rho*(SL - L.u) - R.rho*(SR - R.u));
+  Real Sstar = (R.p - L.p + L.rho*L.u*(SL - L.u) - R.rho*R.u*(SR - R.u))/(L.rho*(SL - L.u) - R.rho*(SR - R.u));
   return {SL, Sstar, SR};
 }
 
 KOKKOS_INLINE_FUNCTION
-static Vec4 Qtilde(const Vec4& Q, double gamma, double SK, double Sstar){
+static Vec4 Qtilde(const Vec4& Q, Real gamma, Real SK, Real Sstar){
   //Q is Q_K with K=L || K=R => q is also q_k
   Primitive_Vals q = QtoPrim(Q, gamma);
-  double mul = q.rho*(SK - q.u)/(SK - Sstar);
-  double E = Q[3];
+  Real mul = q.rho*(SK - q.u)/(SK - Sstar);
+  Real E = Q[3];
   //Toro 10.39
   return Vec4{
     mul,
@@ -108,7 +108,7 @@ static Vec4 Qtilde(const Vec4& Q, double gamma, double SK, double Sstar){
 }
 
 KOKKOS_INLINE_FUNCTION
-Vec4 FluxhllcX(const Vec4& QL, const Vec4& QR, double gamma){
+Vec4 FluxhllcX(const Vec4& QL, const Vec4& QR, Real gamma){
   //left and right primitive vals
   Primitive_Vals L = QtoPrim(QL, gamma);
   Primitive_Vals R = QtoPrim(QR, gamma);
@@ -141,7 +141,7 @@ static Vec4 rotateQxy(const Vec4& Q){
 }
 
 KOKKOS_INLINE_FUNCTION
-Vec4 FluxhllcY(const Vec4& QL, const Vec4& QR, double gamma){
+Vec4 FluxhllcY(const Vec4& QL, const Vec4& QR, Real gamma){
   //rotate so that y becomes the normal direction
   Vec4 QL_rot = rotateQxy(QL);
   Vec4 QR_rot = rotateQxy(QR);
