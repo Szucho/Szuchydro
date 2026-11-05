@@ -1,0 +1,41 @@
+# Sod shock tube along x (Sod 1978). Compare with the exact Riemann solution
+# (tests/run_tests.py has one). Runtime: ~15 s on one core (AMR reaches level 3).
+#
+#   ./build/szuchydro2d examples/sod_shock_tube.txt
+
+# --- grid: 512 x 16 cells, blocks of 16 x 16 ---
+Nx 512
+Ny 16
+nx1_block 16
+nx2_block 16
+xmin -1.0
+xmax 1.0
+ymin -0.0625
+ymax 0.0625
+
+# --- time ---
+Nt 1000            # only sets the first time step guess, the CFL condition takes over
+t0 0.0
+tf 0.2
+cfl 0.4
+n_frames 20        # snapshots written to grid.bin
+
+# --- mesh refinement ---
+use_amr 1          # 0 = static mesh (refine lines below still apply)
+# refine -0.25 0.5 -0.0625 0.0625 1
+
+# --- physics ---
+gamma 1.4
+gas_profile Sod_x  # left: rho = 1, p = 1; right: rho = 0.125, p = 0.1
+gas_rho0 1.0
+gas_p0 1.0
+gas_u0 0.0
+gas_v0 0.0
+
+# --- boundaries: Open, Closed, Periodic, Dirichlet, Outflow ---
+bc_left Open
+bc_right Open
+bc_top Periodic
+bc_bottom Periodic
+
+outdir sod_out

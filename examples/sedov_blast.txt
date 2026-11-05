@@ -1,0 +1,45 @@
+# Sedov-Taylor blast wave in 2D (cylindrical symmetry, Sedov 1959).
+# Energy E is deposited near the centre; the shock radius grows as
+#   r_s = (E / (alpha rho_0))^(1/4) t^(1/2),   alpha = 0.984 for gamma = 1.4
+# so r_s ~ 0.71 at t = 0.5. tests/run_tests.py has the full analytic profile.
+# Runtime: ~1 min on one core (finest level = 512^2 equivalent).
+#
+#   ./build/szuchydro2d examples/sedov_blast.txt
+
+# --- grid ---
+Nx 64
+Ny 64
+nx1_block 16
+nx2_block 16
+xmin -1.0
+xmax 1.0
+ymin -1.0
+ymax 1.0
+
+# --- time ---
+Nt 1000
+t0 0.0
+tf 0.5
+cfl 0.4
+n_frames 50
+
+# --- mesh: AMR follows the shock; start with fine cells at the centre ---
+use_amr 1
+refine -0.0625 0.0625 -0.0625 0.0625 3
+
+# --- physics ---
+gamma 1.4
+gas_profile sedov
+gas_rho0 1.0
+gas_p0 1.0e-5      # ambient pressure (the analytic solution assumes 0)
+gas_u0 0.0
+gas_v0 0.0
+sedov_E 1.0        # blast energy (per unit length), added on top of the ambient gas
+sedov_r 0.03       # deposit radius; keep it << final shock radius (0 -> 3 base cells)
+
+bc_left Periodic
+bc_right Periodic
+bc_top Periodic
+bc_bottom Periodic
+
+outdir sedov_out

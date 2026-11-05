@@ -1,0 +1,51 @@
+# Stirred protoplanetary disk with winds in the R-z plane (x = R, y = z).
+# Stylized look-alike of Fig. 1 of Huang & Bai (2026), not their physics.
+# Runtime: ~13 min on one core. Render with:
+#
+#   ./build/szuchydro2d examples/disk_background.txt
+#   python3 scripts/animate_lic.py disk_out --tmin 80 --fps 20 -o disk.mp4
+#   python3 scripts/animate_lic.py disk_out --field vort --tmin 80 -o disk_vorticity.mp4
+
+# --- grid ---
+Nx 288
+Ny 224
+nx1_block 32
+nx2_block 32
+xmin 2.0           # x = cylindrical radius R, must be > 0
+xmax 12.0
+ymin -4.0
+ymax 4.0
+
+# --- time ---
+Nt 1000
+t0 0.0
+tf 200.0           # the turbulence saturates after t ~ 80-100
+cfl 0.4
+n_frames 200
+
+# --- mesh: AMR off (a stratified disk would refine everywhere) ---
+use_amr 0
+# refine 2.0 12.0 -1.0 1.0 1   # optional refined band around the midplane
+
+# --- gas ---
+gamma 1.4
+gas_profile disk_Rz
+gas_rho0 1.0
+gas_p0 1.0         # unused by disk_Rz but required by the parser
+gas_u0 0.0
+gas_v0 0.0
+
+# --- boundaries (disk_Rz resets ghost rho and p to the initial profile on top of these) ---
+bc_left Outflow
+bc_right Outflow
+bc_top Outflow
+bc_bottom Outflow
+
+# --- disk physics (all optional, defaults shown) ---
+# h_disk 0.1        h_wind 0.5       eta_tr 0.35      q_D 2.25
+# stir_amp 0.2      stir_tcorr 2.0   stir_damp 10     stir_lmin 0.15   stir_lmax 0.4
+# stir_nmodes 24    stir_seed 42
+# wind_mach 1.5     wind_angle 30    wind_tau 1.0     corona_tau 5.0
+# beta_cool 0.01    rho_floor 1e-8   p_floor 1e-12
+
+outdir disk_out
