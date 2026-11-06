@@ -19,6 +19,7 @@
 #include "hydro/reconstruction.hpp"
 #include "io/hydro_io.hpp"
 #include "pgen/pgen.hpp"
+#include "solver/time_integrator.hpp"
 
 //CFL time step calculation (GPU/CPU parallel reduction)
 Real compute_cfl_dt(Mesh& mesh, Real gamma, Real cfl_max){
@@ -63,86 +64,6 @@ Real compute_cfl_dt(Mesh& mesh, Real gamma, Real cfl_max){
 
   return cfl_max/max_wave_speed;
 }
-
-//explicit 2D Euler Finite Volume timestep
-void step_hydro_solver(Mesh& mesh, Real dt, Real gamma, const ReconOptions& recon){
-  int n_active = mesh.num_active_blocks();
-  if(n_active == 0) return;
-
-  View4D q_old = mesh.get_data_view();
-  View4D q_new = mesh.get_data_next_view();
-  View4D flux_face = mesh.get_flux_view();
-
-  int nx1 = mesh.inputs().nx1_block;
-  int nx2 = mesh.inputs().nx2_block;
-  int nghost = mesh.inputs().nghost;
-  int is = nghost, ie = nghost + nx1 - 1;
-  int js = nghost, je = nghost + nx2 - 1;
-
-  View1D block_dx1 = mesh.get_block_dx1_view();
-  View1D block_dx2 = mesh.get_block_dx2_view();
-
-  const ReconOptions opt = recon; //plain struct copied into kernel
-  
-  Kokkos::parallel_for(
-    "StepHydroSolver",
-    Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0, is, js}, {n_active, ie + 1, je + 1}),
-    KOKKOS_LAMBDA(const int b, const int i, const int j){
-
-      Real dx = block_dx1(b);
-      Real dy = block_dx2(b);
-
-      Vec4 qi, qim1, qim2, qip1, qip2;
-      Vec4 qjm1, qjm2, qjp1, qjp2;
-
-      for (size_t k = 0; k < NVAR; ++k) {
-        qi[k]   = q_old(b, i, j, k);
-        qim1[k] = q_old(b, i - 1, j, k);
-        qim2[k] = q_old(b, i - 2, j, k);
-        qip1[k] = q_old(b, i + 1, j, k);
-        qip2[k] = q_old(b, i + 2, j, k);
-
-        qjm1[k] = q_old(b, i, j - 1, k);
-        qjm2[k] = q_old(b, i, j - 2, k);
-        qjp1[k] = q_old(b, i, j + 1, k);
-        qjp2[k] = q_old(b, i, j + 2, k);
-      }
-
-      //face states
-      Vec4 ql_imh, qr_imh, ql_iph, qr_iph;
-      Vec4 ql_jmh, qr_jmh, ql_jph, qr_jph;
-
-      reconstruct_faces(qim2, qim1, qi, qip1, qip2, dx, gamma, opt, ql_imh, qr_imh, ql_iph, qr_iph);
-      reconstruct_faces(qjm2, qjm1, qi, qjp1, qjp2, dy, gamma, opt, ql_jmh, qr_jmh, ql_jph, qr_jph);
-
-      Vec4 fx_imh = FluxhllcX(ql_imh, qr_imh, gamma);
-      Vec4 fx_iph = FluxhllcX(ql_iph, qr_iph, gamma);
-      Vec4 fy_jmh = FluxhllcY(ql_jmh, qr_jmh, gamma);
-      Vec4 fy_jph = FluxhllcY(ql_jph, qr_jph, gamma);
-
-      if(i == is){
-        for (size_t k = 0; k < NVAR; ++k) flux_face(b, (int)FaceDir::XM, j - js, k) = fx_imh[k];
-      }
-      if(i == ie){
-        for (size_t k = 0; k < NVAR; ++k) flux_face(b, (int)FaceDir::XP, j - js, k) = fx_iph[k];
-      }
-      if(j == js){
-        for (size_t k = 0; k < NVAR; ++k) flux_face(b, (int)FaceDir::YM, i - is, k) = fy_jmh[k];
-      }
-      if(j == je){
-        for (size_t k = 0; k < NVAR; ++k) flux_face(b, (int)FaceDir::YP, i - is, k) = fy_jph[k];
-      }
-
-      for(size_t k = 0; k < NVAR; ++k){
-        q_new(b, i, j, k) = qi[k] - (dt/dx)*(fx_iph[k] - fx_imh[k]) 
-                                  - (dt/dy)*(fy_jph[k] - fy_jmh[k]);
-      }
-    }
-  );
-
-  mesh.swap_data_views();
-}
-
 
 //for conservation check: volume integral of conserved variable k (0 = mass, 3 = energy)
 double compute_total(Mesh& mesh, size_t k) {
@@ -237,6 +158,7 @@ int main(int argc, char* argv[]){
     inputs.periodic_x2 = (bc.bottom.type == BCType::Periodic);
 
     Mesh mesh(inputs);
+    TimeIntegrator integrator(par.integrator, mesh.inputs()); //owns the face flux arrays
     mesh.BuildTree();
     mesh.CreateMeshBlocks();
     mesh.SetupNeighbors();
@@ -419,7 +341,9 @@ int main(int argc, char* argv[]){
           t_next_save += t_save;
         }
 
-        step_hydro_solver(mesh, dt, par.gamma, par.recon);
+        //this one, 170 degrees 40 minutes
+        integrator.step(mesh, dt, gamma, par.recon, hooks.smooth_sources);
+        //you work hard, you recover harder
         ApplyReflux(mesh, dt);
         if(hooks.source_terms) hooks.source_terms(mesh, dt);
         ExchangeGhostZones(mesh);

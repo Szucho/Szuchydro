@@ -55,24 +55,22 @@ Vec4 prim_to_cons(const Vec4& w, Real gamma){
   return Vec4{rho, rho*u, rho*v, p/(gamma - 1.0) + 0.5*rho*(u*u + v*v)};
 }
 
-//face states around cell 0 from the 5-cell stencil (m2, m1, 0, p1, p2) along one direction:
-//  l_mh, r_mh: left and right state at the face between m1 and 0
-//  l_ph, r_ph: left and right state at the face between 0 and p1
+//Left and right state at ONE face, the face between cells m1 and c0, from the 4-cell stencil
+//(m2, m1 | c0, p1) along one direction:
+//  l: from cell m1, extrapolated to its right edge with the slope over (m2, m1, c0)
+//  r: from cell c0, extrapolated to its left edge with the slope over (m1, c0, p1)
+//Each face is computed once (by ComputeFluxes in solver/rhs.cpp), with exactly the
+//arithmetic the old per-cell version used, so results are bit-for-bit unchanged.
 KOKKOS_INLINE_FUNCTION
-void reconstruct_faces(const Vec4& m2, const Vec4& m1, const Vec4& c0,
-                       const Vec4& p1, const Vec4& p2, Real dk,
-                       Real gamma, const ReconOptions& opt, 
-                       Vec4& l_mh, Vec4& r_mh, Vec4& l_ph, Vec4& r_ph){
+void reconstruct_face(const Vec4& m2, const Vec4& m1, const Vec4& c0, const Vec4& p1,
+                      Real dk, Real gamma, const ReconOptions& opt, Vec4& l, Vec4& r){
   if(!opt.primitive){
-    //if not primitive reconstruction then just use the given slope limiter
+    //conserved reconstruction: limit (rho, rho u, rho v, E) directly
     Vec4 s_m1 = limited_slope(m2, m1, c0, dk, opt.limiter);
     Vec4 s_0  = limited_slope(m1, c0, p1, dk, opt.limiter);
-    Vec4 s_p1 = limited_slope(c0, p1, p2, dk, opt.limiter);
     for(size_t k = 0; k < NVAR; ++k){ //constructing the face states
-      l_mh[k] = m1[k] + 0.5*dk*s_m1[k];
-      r_mh[k] = c0[k] - 0.5*dk*s_0[k];
-      l_ph[k] = c0[k] + 0.5*dk*s_0[k];
-      r_ph[k] = p1[k] - 0.5*dk*s_p1[k];
+      l[k] = m1[k] + 0.5*dk*s_m1[k];
+      r[k] = c0[k] - 0.5*dk*s_0[k];
     }
     return;
   }
@@ -80,21 +78,16 @@ void reconstruct_faces(const Vec4& m2, const Vec4& m1, const Vec4& c0,
   //primitive: limit (rho, u, v, p)
   //TVD limiters keep each face value between the neighbouring
   //cell values, so rho and p stay positive at the faces.
-  Vec4 wm2 = cons_to_prim(m2, gamma), wm1 = cons_to_prim(m1, gamma), w0 = cons_to_prim(c0, gamma);
-  Vec4 wp1 = cons_to_prim(p1, gamma), wp2 = cons_to_prim(p2, gamma);
+  Vec4 wm2 = cons_to_prim(m2, gamma), wm1 = cons_to_prim(m1, gamma);
+  Vec4 w0 = cons_to_prim(c0, gamma), wp1 = cons_to_prim(p1, gamma);
   Vec4 s_m1 = limited_slope(wm2, wm1, w0, dk, opt.limiter);
   Vec4 s_0  = limited_slope(wm1, w0, wp1, dk, opt.limiter);
-  Vec4 s_p1 = limited_slope(w0, wp1, wp2, dk, opt.limiter);
-  Vec4 a, b, c, d;
+  Vec4 a, b;
   for(size_t k = 0; k < NVAR; ++k){ //constructing face states
     a[k] = wm1[k] + 0.5*dk*s_m1[k];
     b[k] = w0[k]  - 0.5*dk*s_0[k];
-    c[k] = w0[k]  + 0.5*dk*s_0[k];
-    d[k] = wp1[k] - 0.5*dk*s_p1[k];
   }
   //since we used primitive vals here we need to convert back to conserved vals
-  l_mh = prim_to_cons(a, gamma);
-  r_mh = prim_to_cons(b, gamma);
-  l_ph = prim_to_cons(c, gamma);
-  r_ph = prim_to_cons(d, gamma);
+  l = prim_to_cons(a, gamma);
+  r = prim_to_cons(b, gamma);
 }

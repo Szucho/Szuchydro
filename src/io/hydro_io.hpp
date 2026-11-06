@@ -54,6 +54,8 @@ struct SimParams {
   Real amr_derefine_tol = 0.01; //derefine if it stays below this everywhere
   //reconstruction: limiter (minmod, vanleer, superbee, mc) and variables (conserved, primitive)
   ReconOptions recon;
+  //time integrator (euler; TODO: vl2 SOON), checked when integrator is created
+  std::string integrator = "euler";
   //Dirichlet walls: fixed primitive state (rho, u, v, p), only used if that wall is Dirichlet
   struct WallState { Real rho = 0.0, u = 0.0, v = 0.0, p = 0.0; };
   WallState dir_left, dir_right, dir_bottom, dir_top;

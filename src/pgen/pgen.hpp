@@ -5,6 +5,7 @@
 #include "core/hydro_config.hpp"
 #include "mesh/mesh.hpp"
 #include "io/hydro_io.hpp"
+#include "solver/time_integrator.hpp"
 
 /*
  Problem generators: one file per problem in src/pgen/, chosen with "gas_profile <name>".
@@ -23,6 +24,11 @@
 
 //first of all we need a problem hook to main
 struct ProblemHooks{
+  //smooth/well behaved source terms INSIDE the update,
+  //from the same stage state as fluxes
+  //(e.g. gravity, forcing, ...): add dt*S(U_stage) to U_out
+  //Evaluated in every stage of the integrator
+  SourceFn smooth_sources;
   //operator-split source terms, applied after every hydro step (e.g. stirring, cooling)
   std::function<void(Mesh& mesh, Real dt)> source_terms;
   //extra ghost-cell treatment, applied right after the physical boundary conditions

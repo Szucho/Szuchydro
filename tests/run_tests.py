@@ -8,6 +8,7 @@ Physics problems checks:
     sod_amr             same with adaptive refinement -> test AMR remap + refluxing
     sod_amr_level2      AMR capped at amr_max_level 2 (tests AMR parameters)
     invalid_params      bad input must stop with 'Parameter error' and an exit code 1
+    invalid_integrator  unknown integrator must stop with a "Parameter error"
     sod_vanleer, sod_superbee, sod_mc, sod_primitive   Sod with each limiter / primitive reconstruction
     dirichlet_contact_x/_y  contact carried in through a Dirichlet wall
     contact_primitive   the same with primitive reconstruction: u and p uniform to round-off
@@ -518,8 +519,8 @@ ALL = ["sod_uniform", "sod_smr", "sod_amr", "sod_amr_level2",
        "sod_vanleer", "sod_superbee", "sod_mc", "sod_primitive",
        "dirichlet_contact_x", "dirichlet_contact_y", "contact_primitive",
        "sedov_uniform", "sedov_amr", "disk_equilibrium", "disk_stirred",
-       "outflow_walls", "unused_param_warning",
-       "invalid_params", "invalid_dirichlet", "invalid_problem", "invalid_number"]
+       "outflow_walls", "unused_param_warning", "invalid_params",
+       "invalid_dirichlet", "invalid_problem", "invalid_number", "invalid_integrator"]
 
 def main():
     ap = argparse.ArgumentParser(description="Szuchydro test suite")
@@ -571,7 +572,11 @@ def main():
         print(f"\nsaved {len(hashes)} final-frame hashes and snapshots to {a.save_ref}/")
 
     if a.compare_ref:
-        ref = json.load(open(os.path.join(a.compare_ref, "hashes.json")))
+        ref_file = os.path.join(a.compare_ref, "hashes.json")
+        if not os.path.isfile(ref_file):
+            sys.exit(f"\nno references in {a.compare_ref}:"
+                     "save them first with --save-ref {a.compare_ref}")
+        ref = json.load(open(ref_file))
         tol_txt = f" (accepting relative differences <= {a.tol:g})" if a.tol > 0 else ""
         print(f"\nbit-for-bit comparison{tol_txt}:")
         for n in names:
