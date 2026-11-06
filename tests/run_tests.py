@@ -86,6 +86,33 @@ def primitives(Q, gamma):
     p = (gamma - 1.0)*(Q[3] - 0.5*rho*(u*u + v*v))
     return rho, u, v, p
 
+def save_frame_npz(path, frame):
+    """final snapshot for --save-ref: time, block table and data, so a later comparison
+    can say HOW different two runs are, not just whether they differ."""
+    t, blocks, arrs = frame
+    np.savez_compressed(path, t=np.array(t), blocks=np.array(blocks, dtype=np.float64),
+                        data=np.stack(arrs))
+
+
+VAR_NAMES = ["rho", "mx", "my", "E"]
+
+
+def compare_frames(ref_npz, frame):
+    """none if the meshes differ, else the max difference per variable relative to that
+    variable's largest magnitude in the reference (absolute if the reference is all zero)."""
+    ref = np.load(ref_npz)
+    t, blocks, arrs = frame
+    if ref["blocks"].shape != np.array(blocks).shape or \
+       not np.array_equal(ref["blocks"], np.array(blocks, dtype=np.float64)):
+        return None
+    new, old = np.stack(arrs), ref["data"]
+    diffs = []
+    for k in range(NVAR):
+        scale = np.max(np.abs(old[..., k]))
+        d = np.max(np.abs(new[..., k] - old[..., k]))
+        diffs.append(d/scale if scale > 0 else d)
+    return diffs
+
 def frame_hash(frame):
     h = hashlib.sha256()
     t, blocks, arrs = frame
@@ -443,7 +470,12 @@ def main():
     ap.add_argument("-k", default="", help="only run tests whose name contains this")
     ap.add_argument("--keep", action="store_true", help="keep the run directory")
     ap.add_argument("--save-ref", metavar="DIR", help="store final-frame hashes (bit-for-bit mode)")
-    ap.add_argument("--compare-ref", metavar="DIR", help="compare final-frame hashes to DIR")
+    ap.add_argument("--compare-ref", metavar="DIR", 
+                    help="compare final frames to the references in DIR")
+    ap.add_argument("--tol", type=float, default=0.0,
+                    help=("with --compare-ref: accept max relative"  
+                    "differences up to this (default 0 = bit-for-bit)"))
+
     a = ap.parse_args()
     exe = os.path.abspath(a.exe)
     if not os.path.isfile(exe):
@@ -453,7 +485,7 @@ def main():
     work = tempfile.mkdtemp(prefix="szuchydro_tests_")
     print(f"running {len(names)} test(s) in {work}\n")
 
-    results, hashes = [], {}
+    results, hashes, finals = [], {}, {}
     for n in names:
         res = test_case(exe, n, work)
         results.append(res)
@@ -469,6 +501,7 @@ def main():
             frames = read_frames(os.path.join(res.outdir, "grid.bin"))
             if frames:  #a crashed run can leave an empty file behind
                 hashes[n] = frame_hash(frames[-1])
+                finals[n] = frames[-1]
 
 
     ok = all(r.passed for r in results) #only if every test passed
@@ -476,17 +509,36 @@ def main():
         os.makedirs(a.save_ref, exist_ok=True)
         with open(os.path.join(a.save_ref, "hashes.json"), "w") as f:
             json.dump(hashes, f, indent=2)
-        print(f"\nsaved {len(hashes)} final-frame hashes to {a.save_ref}/hashes.json")
+        for n, fr in finals.items():
+            save_frame_npz(os.path.join(a.save_ref, n + ".npz"), fr)
+        print(f"\nsaved {len(hashes)} final-frame hashes and snapshots to {a.save_ref}/")
+
     if a.compare_ref:
         ref = json.load(open(os.path.join(a.compare_ref, "hashes.json")))
-        print("\nbit-for-bit comparison:")
+        tol_txt = f" (accepting relative differences <= {a.tol:g})" if a.tol > 0 else ""
+        print(f"\nbit-for-bit comparison{tol_txt}:")
         for n in names:
             if n not in ref:
                 print(f"    ? {n}: no reference")
                 continue
-            same = hashes.get(n) == ref[n]
-            ok &= same
-            print(f"    {'identical' if same else 'DIFFERENT'}  {n}")
+            if hashes.get(n) == ref[n]:
+                print(f"    identical  {n}")
+                continue
+            npz = os.path.join(a.compare_ref, n + ".npz")
+            if n not in finals or not os.path.isfile(npz):  #crashed run, or old-style reference
+                ok = False
+                print(f"    DIFFERENT  {n}")
+                continue
+            diffs = compare_frames(npz, finals[n])
+            if diffs is None:
+                ok = False
+                print(f"    DIFFERENT  {n}   (mesh structure changed)")
+                continue
+            within = max(diffs) <= a.tol
+            ok &= within
+            detail = ", ".join(f"{v} {d:.1e}" for v, d in zip(VAR_NAMES, diffs))
+            print(f"    {'within tol' if within else 'DIFFERENT '}  {n} max rel. diff: {detail}")
+
 
     if not a.keep:
         shutil.rmtree(work, ignore_errors=True)
