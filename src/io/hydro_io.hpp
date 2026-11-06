@@ -14,7 +14,7 @@
 #include "bvals/bvals.hpp"
 #include "mesh/mesh.hpp"
 #include "hydro/reconstruction.hpp"
-#include "physics/disk_physics.hpp"
+#include "param_store.hpp"
 
 /*
  Input / Output header for Kokkos AMR Hydro Simulation
@@ -40,9 +40,8 @@ struct SimParams {
   Real gamma;
   //boundary conditions
   std::string bc_left, bc_right, bc_top, bc_bottom;
-  //gas initial condition
+  //problem to set up (src/pgen/); its own parameters are read from 'store'
   std::string gas_profile;
-  Real gas_rho0, gas_p0, gas_u0, gas_v0; 
   //output
   std::string outdir;
   int n_frames = 100; //number of snapshots written to grid.bin
@@ -59,19 +58,14 @@ struct SimParams {
   struct WallState { Real rho = 0.0, u = 0.0, v = 0.0, p = 0.0; };
   WallState dir_left, dir_right, dir_bottom, dir_top;
   Real cfl = 0.4;
-  //disk r--z problem:
-  DiskParams disk;
 
-  //Sedov problem
-  Real sedov_E = 1.0; 
-  Real sedov_r = 0.0;
+  //all "key value" pairs of the parameter file (problem generators read their keys here)
+  ParamStore store;
 };
 
 //parameter and setup functions
 SimParams readParams(const std::string& filename);
 BCType parseBC(const std::string& s);
-void init_cond(Mesh& mesh, const SimParams& par);
-DiskModel BuildDiskModelFromParams(const SimParams& par);
 void setupOutputDir(const std::string& dir);
 void writeMetadata(const std::string& outdir, const SimParams& par);
 std::ofstream openGridFile(const std::string& outdir, Mesh& mesh);

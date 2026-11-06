@@ -21,6 +21,4 @@ bc_bottom Periodic
 gas_profile Sod_x
 gas_rho0 1.0
 gas_p0 1.0
-gas_u0 0.0
-gas_v0 0.0
 outdir sod_amr_out

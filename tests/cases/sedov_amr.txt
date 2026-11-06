@@ -21,8 +21,6 @@ bc_bottom Periodic
 gas_profile sedov
 gas_rho0 1.0
 gas_p0 1.0e-5      # ambient pressure (ideally 0)
-gas_u0 0.0
-gas_v0 0.0
 sedov_E 1.0        # blast energy
 sedov_r 0.047      # deposit radius: point-like vs the final shock radius (~0.71)
 # fine cells at the centre from t = 0, so the deposit is resolved (AMR takes over from there)

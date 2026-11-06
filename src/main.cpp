@@ -18,7 +18,7 @@
 #include "hydro/slope_limiters.hpp"
 #include "hydro/reconstruction.hpp"
 #include "io/hydro_io.hpp"
-#include "physics/disk_physics.hpp"
+#include "pgen/pgen.hpp"
 
 //CFL time step calculation (GPU/CPU parallel reduction)
 Real compute_cfl_dt(Mesh& mesh, Real gamma, Real cfl_max){
@@ -214,6 +214,8 @@ int main(int argc, char* argv[]){
     std::string param_file = (argc > 1) ? argv[1] : "params.txt"; //look for input file
     //reading and processing simulation parameters
     SimParams par = readParams(param_file);
+    //unknown name: fails here, before any setup
+    const ProblemEntry& problem = FindProblem(par.gas_profile); 
 
     MeshInputs inputs;
     inputs.domain = RegionSize{par.xmin, par.xmax, par.ymin, par.ymax, par.Nx, par.Ny};
@@ -245,19 +247,18 @@ int main(int argc, char* argv[]){
 
     std::cout << "Active leaf blocks created: " << mesh.num_active_blocks() << "\n";
 
-    init_cond(mesh, par);
+    //initial state + problem-specific extras for the time loop (src/pgen/)
+    ProblemHooks hooks;
+    problem.init(mesh, par, hooks);
 
-    const bool use_disk = (par.gas_profile == "disk_Rz");
-    DiskModel disk_model;
-    std::unique_ptr<StirringForce> stirring;
-    if(use_disk){
-      disk_model = BuildDiskModelFromParams(par);
-      stirring   = std::make_unique<StirringForce>(par.disk);
-    }
+    //keys in the parameter file that nothing has read: almost always a typo
+    for(const auto& key : par.store.unused())
+      std::cerr << "Warning: parameter '" << key << "' is not used by this setup (typo?)\n";
+
 
     auto apply_bcs = [&](){
       ApplyPhysicalBoundaryConditions(mesh, bc);
-      if(use_disk) ApplyDiskBoundaries(mesh, disk_model, par.gamma);
+      if(hooks.boundaries) hooks.boundaries(mesh);
     };
 
     //capturing initial density profile
@@ -420,10 +421,7 @@ int main(int argc, char* argv[]){
 
         step_hydro_solver(mesh, dt, par.gamma, par.recon);
         ApplyReflux(mesh, dt);
-        if(use_disk){
-          stirring -> Advance(dt);
-          AddDiskSourceTerms(mesh, disk_model, *stirring, dt, par.gamma);
-        }
+        if(hooks.source_terms) hooks.source_terms(mesh, dt);
         ExchangeGhostZones(mesh);
         apply_bcs();
 

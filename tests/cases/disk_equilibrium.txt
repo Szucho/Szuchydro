@@ -20,9 +20,6 @@ bc_top Outflow
 bc_bottom Outflow
 gas_profile disk_Rz
 gas_rho0 1.0
-gas_p0 1.0
-gas_u0 0.0
-gas_v0 0.0
 stir_amp 0.0
 wind_mach 0.0
 outdir disk_equilibrium_out

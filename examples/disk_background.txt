@@ -31,9 +31,6 @@ use_amr 0
 gamma 1.4
 gas_profile disk_Rz
 gas_rho0 1.0
-gas_p0 1.0         # unused by disk_Rz but required by the parser
-gas_u0 0.0
-gas_v0 0.0
 
 # --- boundaries (disk_Rz resets ghost rho and p to the initial profile on top of these) ---
 bc_left Outflow

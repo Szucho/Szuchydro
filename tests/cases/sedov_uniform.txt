@@ -21,7 +21,5 @@ bc_bottom Periodic
 gas_profile sedov
 gas_rho0 1.0
 gas_p0 1.0e-5      # ambient pressure (ideally 0)
-gas_u0 0.0
-gas_v0 0.0
 sedov_E 1.0        # blast energy, deposited within 3 base cells of the centre
 outdir sedov_uniform_out

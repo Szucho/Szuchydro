@@ -38,8 +38,6 @@ gamma 1.4
 gas_profile Sod_x  # left: rho = 1, p = 1; right: rho = 0.125, p = 0.1
 gas_rho0 1.0
 gas_p0 1.0
-gas_u0 0.0
-gas_v0 0.0
 
 # --- boundaries: Open, Closed, Periodic, Dirichlet, Outflow ---
 bc_left Open

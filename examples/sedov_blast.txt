@@ -37,8 +37,6 @@ gamma 1.4
 gas_profile sedov
 gas_rho0 1.0
 gas_p0 1.0e-5      # ambient pressure (the analytic solution assumes 0)
-gas_u0 0.0
-gas_v0 0.0
 sedov_E 1.0        # blast energy (per unit length), added on top of the ambient gas
 sedov_r 0.03       # deposit radius; keep it << final shock radius (0 -> 3 base cells)
 

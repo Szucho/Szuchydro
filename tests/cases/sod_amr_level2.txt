@@ -21,8 +21,6 @@ bc_bottom Periodic
 gas_profile Sod_x
 gas_rho0 1.0
 gas_p0 1.0
-gas_u0 0.0
-gas_v0 0.0
 amr_max_level 2
 amr_refine_tol 0.05
 amr_derefine_tol 0.01

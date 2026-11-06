@@ -13,6 +13,9 @@ Physics problems checks:
     contact_primitive   the same with primitive reconstruction: u and p uniform to round-off
     invalid_dirichlet   Dirichlet wall with a missing state component must stop with 'Parameter error'
     outflow_walls       gas streaming towards each wall (outflow): rotated/mirrored results must agree
+    invalid_problem     unknown gas_profile must stop with 'Parameter error'
+    invalid_number      'tf 0.2s' must stop with 'Parameter error' (no silent partial parsing)
+    unused_param_warning  a misspelled key ('limitter') must run but be reported as unused
     sedov_uniform       2D Sedov-Taylor blast vs analytical solution + symmetry + conservation
     sedov_amr           same with AMR from coarse base grid (2D refinement in both directions)
     disk_equilibrium    disk_Rz without stirring/wind must stay in hydrostatic equilibrium
@@ -430,8 +433,19 @@ def test_case(exe, name, workdir):
         res.log_tail = "\n".join(log.replace("\r", "\n").splitlines()[-15:])
         return res
 
-    bad = [l for l in log.replace("\r", "\n").splitlines() if "INVALID" in l.upper() or "ERROR" in l.upper()]
+    lines = log.replace("\r", "\n").splitlines()
+    bad = [l for l in lines if "INVALID" in l.upper() or "ERROR" in l.upper()]
+
     res.check("no INVALID/ERROR in log", len(bad), not bad, "= 0")
+    unused = [l for l in lines if "is not used by this setup" in l]
+    if name == "unused_param_warning":  #the typo must be reported (and nothing else)
+        found = any("'limitter'" in l for l in unused)
+        res.check("warning names 'limitter'", int(found), found, "= 1")
+        res.check("no other unused-parameter warnings",
+                  len(unused) - int(found), len(unused) == int(found), "= 0")
+    else:  #test cases must not contain keys their problem never reads
+        res.check("no unused-parameter warnings", len(unused), not unused, "= 0")
+
     gfile = os.path.join(outdir, "grid.bin") if outdir else ""
     frames = read_frames(gfile) if os.path.isfile(gfile) else []
     res.check("snapshots written", len(frames), len(frames) >= 2, ">= 2")
@@ -450,6 +464,8 @@ def test_case(exe, name, workdir):
         check_sod(res, frames, gamma, l1_limit=8e-3)
         lv = max(b[0] for b in frames[-1][1])
         res.check("AMR refined (max level)", lv, lv >= 1, ">= 1")
+    elif name == "unused_param_warning":
+        check_sod(res, frames, gamma, l1_limit=6e-3)  #runs normally, with the default limiter
     elif name == "sod_amr_level2":
         check_sod(res, frames, gamma, l1_limit=8e-3)
         lv = max(b[0] for b in frames[-1][1])
@@ -502,7 +518,8 @@ ALL = ["sod_uniform", "sod_smr", "sod_amr", "sod_amr_level2",
        "sod_vanleer", "sod_superbee", "sod_mc", "sod_primitive",
        "dirichlet_contact_x", "dirichlet_contact_y", "contact_primitive",
        "sedov_uniform", "sedov_amr", "disk_equilibrium", "disk_stirred",
-       "outflow_walls", "invalid_params", "invalid_dirichlet"]
+       "outflow_walls", "unused_param_warning",
+       "invalid_params", "invalid_dirichlet", "invalid_problem", "invalid_number"]
 
 def main():
     ap = argparse.ArgumentParser(description="Szuchydro test suite")

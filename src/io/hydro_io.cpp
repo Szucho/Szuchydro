@@ -1,4 +1,5 @@
 #include "io/hydro_io.hpp"
+#include "io/param_store.hpp"
 #include "mesh/mesh.hpp"
 #include <stdexcept>
 #include <string>
@@ -15,7 +16,7 @@ SimParams readParams(const std::string& filename){ //reads in params.txt
   std::ifstream f(filename);
   if(!f) throw std::runtime_error("Cannot open param file: " + filename);
 
-  std::map<std::string, std::string> kv;
+  ParamStore store; //every "key value" line; problem generators read their own keys from it
   std::vector<RefinementRegion> refine_regions;
   std::string line;
   while(std::getline(f, line)){ //file read in
@@ -33,17 +34,15 @@ SimParams readParams(const std::string& filename){ //reads in params.txt
       continue;
     }
     std::string val;
-    if(ss >> val) kv[key] = val;
+    if(ss >> val) store.set(key, val);
   }
 
-  auto has = [&](const std::string& k) { return kv.find(k) != kv.end(); };
-  auto get = [&](const std::string& k) -> std::string{
-      auto it = kv.find(k);
-      if(it == kv.end()) throw std::runtime_error("Missing parameter: " + k);
-      return it->second;
-  };
-  auto getd = [&](const std::string& k){ return std::stod(get(k)); };
-  auto geti = [&](const std::string& k){ return std::stoi(get(k)); };
+  //shorthands: the store checks the values ("Nx abc" -> clear error) and records what was read
+  auto has  = [&](const std::string& k){ return store.has(k); };
+  auto get  = [&](const std::string& k){ return store.get(k); };
+  auto getd = [&](const std::string& k){ return store.get_real(k); };
+  auto geti = [&](const std::string& k){ return store.get_int(k); };
+
 
   SimParams p; //just reading in all the other parameters
   p.Nx   = geti("Nx");    p.Ny  = geti("Ny");   p.Nt  = geti("Nt");
@@ -61,12 +60,9 @@ SimParams readParams(const std::string& filename){ //reads in params.txt
   p.bc_right  = get("bc_right");
   p.bc_top    = get("bc_top");
   p.bc_bottom = get("bc_bottom");
-  //gas initial condition
+  //problem to set up (src/pgen/) 
+  //its own parameters (gas_rho0, ...) are read by the problem generator
   p.gas_profile = get("gas_profile");
-  p.gas_rho0    = getd("gas_rho0");
-  p.gas_p0      = getd("gas_p0");
-  p.gas_u0      = getd("gas_u0");
-  p.gas_v0      = getd("gas_v0");
   p.outdir      = get("outdir");
 
   //optional keys (old params.txt files keep working this is for ppd)
@@ -120,29 +116,6 @@ SimParams readParams(const std::string& filename){ //reads in params.txt
   read_wall("bottom", p.bc_bottom, p.dir_bottom);
   read_wall("top",    p.bc_top,    p.dir_top);
 
-
-  p.sedov_E  = optd("sedov_E", p.sedov_E);
-  p.sedov_r  = optd("sedov_r", p.sedov_r);
-  DiskParams& d = p.disk;
-  d.h_disk      = optd("h_disk", d.h_disk);
-  d.h_wind      = optd("h_wind", d.h_wind);
-  d.eta_tr      = optd("eta_tr", d.eta_tr);
-  d.q_D         = optd("q_D", d.q_D);
-  d.rho_floor   = optd("rho_floor", d.rho_floor);
-  d.p_floor     = optd("p_floor", d.p_floor);
-  d.beta_cool   = optd("beta_cool", d.beta_cool);
-  d.stir_nmodes = opti("stir_nmodes", d.stir_nmodes);
-  d.stir_amp    = optd("stir_amp", d.stir_amp);
-  d.stir_tcorr  = optd("stir_tcorr", d.stir_tcorr);
-  d.stir_damp   = optd("stir_damp", d.stir_damp);
-  d.stir_lmin   = optd("stir_lmin", d.stir_lmin);
-  d.stir_lmax   = optd("stir_lmax", d.stir_lmax);
-  d.stir_seed   = (unsigned)opti("stir_seed", (int)d.stir_seed);
-  d.wind_mach   = optd("wind_mach", d.wind_mach);
-  d.wind_angle  = optd("wind_angle", d.wind_angle);
-  d.wind_tau    = optd("wind_tau", d.wind_tau);
-  d.corona_tau  = optd("corona_tau", d.corona_tau);
-  
   //sanity checks
   auto require = [](bool ok, const std::string& msg){
     if(!ok) throw std::runtime_error("Parameter error: " + msg);
@@ -160,6 +133,7 @@ SimParams readParams(const std::string& filename){ //reads in params.txt
     }
   }
 
+  p.store = std::move(store); //problem generators read their keys from here
   return p;
 }
 
@@ -171,117 +145,6 @@ BCType parseBC(const std::string& s){
   else if (s == "Dirichlet") return BCType::Dirichlet;
   else if (s == "Outflow")   return BCType::Outflow;
   else throw std::invalid_argument("Unknown BC type: " + s);
-}
-
-
-//disk model with an |eta| table covering the whole domain incl. ghost cells
-DiskModel BuildDiskModelFromParams(const SimParams& par){
-  Real ymax_abs = std::max(std::abs(par.ymin), std::abs(par.ymax));
-  Real eta_max = 1.5*ymax_abs/par.xmin + 1.0;
-  return BuildDiskModel(par.disk, par.gas_rho0, eta_max);
-}
-
-
-//just some initial conditions
-void init_cond(Mesh& mesh, const SimParams& par){
-  View4D data = mesh.get_data_view();
-  Real gamma = par.gamma;
-  Real xmin = par.xmin;
-  Real xmax = par.xmax;
-  std::string profile = par.gas_profile;
-  Real rho0 = par.gas_rho0;
-  Real p0 = par.gas_p0;
-  Real u0 = par.gas_u0;
-  Real v0 = par.gas_v0;
-  int nghost = mesh.inputs().nghost;
-
-  //does disk init cond found in disk_phycics.cpp
-  if(profile == "disk_Rz"){
-    InitDiskRz(mesh, BuildDiskModelFromParams(par), gamma);
-    return;
-  }
-
-  Real sedov_r_dep = 0.0, sedov_p_in = 0.0; //for sedov but no need to have it inside loop
-  if(profile == "sedov"){
-    Real dx_base = (par.xmax - par.xmin)/par.Nx;
-    sedov_r_dep = (par.sedov_r > 0.0) ? par.sedov_r : 3.0*dx_base; 
-    Real xc = 0.5*(par.xmin + par.xmax), yc = 0.5*(par.ymin + par.ymax);
-    Real area = 0.0;
-    for(auto& bptr : mesh.blocks()){
-      const MeshBlock& b = *bptr;
-      for(int i=0; i<b.block_size.nx1; ++i){
-        for(int j=0; j<b.block_size.nx2; ++j){
-          Real x = b.block_size.x1min + (i + 0.5)*b.dx1() - xc;
-          Real y = b.block_size.x2min + (j + 0.5)*b.dx2() - yc;
-          if(x*x + y*y < sedov_r_dep*sedov_r_dep) area += b.dx1()*b.dx2();
-        }
-      }
-    }
-    if(area<=0.0) throw std::runtime_error("[SEDOV]: deposit radius smaller than a cell");
-    sedov_p_in = (gamma - 1.0)*par.sedov_E/area;
-  }
-
-  for(auto& bptr : mesh.blocks()){
-    const MeshBlock& b = *bptr;
-    int b_slot = b.slot_id;
-    int total_i = b.block_size.nx1 + 2*nghost;
-    int total_j = b.block_size.nx2 + 2*nghost;
-
-    if(profile == "uniform"){
-      Kokkos::parallel_for("InitUniform", Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {total_i, total_j}),
-        KOKKOS_LAMBDA(int i, int j) {
-          data(b_slot, i, j, IDN) = rho0;
-          data(b_slot, i, j, IM1) = rho0*u0;
-          data(b_slot, i, j, IM2) = rho0*v0;
-          data(b_slot, i, j, IEN) = p0/(gamma - 1.0) + 0.5*rho0*(u0*u0 + v0*v0);
-        }
-      );
-    }else if(profile == "Sod_x"){
-      Real rho_L = rho0,     p_L = p0,     u_L = 0.0, v_L = 0.0;
-      Real rho_R = rho0/8.0, p_R = 0.1*p0, u_R = 0.0, v_R = 0.0;
-      Real x_mid = 0.5 * (xmin + xmax);
-      int is = b.is; //offset to map cell index to physical coordinates
-      Real x1min = b.block_size.x1min;
-      Real dx1 = b.dx1();
-
-      //initialize across the ENTIRE block including ghosts so no cell is left with NaN/zeros
-      Kokkos::parallel_for("InitSod", Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {total_i, total_j}),
-        KOKKOS_LAMBDA(int i, int j) {
-          Real x = x1min + (i - is + 0.5)*dx1;
-          Real rho = (x < x_mid) ? rho_L : rho_R;
-          Real p   = (x < x_mid) ? p_L   : p_R;
-          Real u   = (x < x_mid) ? u_L   : u_R;
-          Real v   = (x < x_mid) ? v_L   : v_R;
-          Real E   = p/(gamma - 1.0) + 0.5*rho*(u*u + v*v);
-
-          data(b_slot, i, j, IDN) = rho;
-          data(b_slot, i, j, IM1) = rho*u;
-          data(b_slot, i, j, IM2) = rho*v;
-          data(b_slot, i, j, IEN) = E;
-        }
-      );
-    }else if(profile == "sedov"){
-      //uniform ambient medium + energy sedov_E deposited inside r<r_dep (pressure p_in)
-      int is = b.is, js = b.js;
-      Real x1min = b.block_size.x1min, x2min = b.block_size.x2min;
-      Real dx1 = b.dx1(), dx2 = b.dx2();
-      Real xc = 0.5*(par.xmin + par.xmax), yc = 0.5*(par.ymin + par.ymax);
-      Real r_dep = sedov_r_dep, p_in = sedov_p_in;
-      Kokkos::parallel_for("InitSedov", Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {total_i, total_j}),
-        KOKKOS_LAMBDA(int i, int j){
-          Real x = x1min + (i - is + 0.5)*dx1 - xc;  
-          Real y = x2min + (j - js + 0.5)*dx2 - yc;
-          Real p = (x*x + y*y < r_dep*r_dep) ? p0 + p_in : p0; //ambient + blast energy
-          data(b_slot, i, j, IDN) = rho0;
-          data(b_slot, i, j, IM1) = 0.0;
-          data(b_slot, i, j, IM2) = 0.0;
-          data(b_slot, i, j, IEN) = p/(gamma - 1.0);
-        }
-      );
-    }else{
-      throw std::runtime_error("Unknown gas_profile: " + profile);
-    }
-  }
 }
 
 //output handling
