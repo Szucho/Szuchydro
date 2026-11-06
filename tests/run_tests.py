@@ -12,6 +12,7 @@ Physics problems checks:
     dirichlet_contact_x/_y  contact carried in through a Dirichlet wall
     contact_primitive   the same with primitive reconstruction: u and p uniform to round-off
     invalid_dirichlet   Dirichlet wall with a missing state component must stop with 'Parameter error'
+    outflow_walls       gas streaming towards each wall (outflow): rotated/mirrored results must agree
     sedov_uniform       2D Sedov-Taylor blast vs analytical solution + symmetry + conservation
     sedov_amr           same with AMR from coarse base grid (2D refinement in both directions)
     disk_equilibrium    disk_Rz without stirring/wind must stay in hydrostatic equilibrium
@@ -373,7 +374,46 @@ def run_case(exe, name, workdir):
             outdir = os.path.join(workdir, parts[1])
     return r.returncode, log, dt, outdir
 
+def test_outflow_walls(exe, workdir):
+    """gas streams towards each wall in turn (cases outflow_left/right/bottom/top), with Outflow
+    on both walls of that direction: one wall lets the gas leave, the other must block inflow.
+    the four runs are the same problem rotated or mirrored, so after transforming them back into
+    the frame of outflow_left they must agree to round-off.
+    Catches index/sign mistakes in any wall."""
+    res = Result("outflow_walls")
+    res.runtime, res.outdir = 0.0, None
+    fields = {}
+    for case in ["left", "right", "bottom", "top"]:
+        code, log, dt, outdir = run_case(exe, "outflow_" + case, workdir)
+        res.runtime += dt
+        res.check(f"exit code ({case})", code, code == 0, "= 0")
+        if code != 0:
+            res.log_tail = "\n".join(log.replace("\r", "\n").splitlines()[-15:])
+            return res
+        x, y, Q = stitch(read_frames(os.path.join(outdir, "grid.bin"))[-1])
+        rho, u, v, p = primitives(Q, 1.4)
+        # into the frame of outflow_left: flow along -x, arrays indexed [along flow, across]
+        if case == "left":
+            f = (rho, p, u, v)
+        elif case == "right":    # mirror x
+            f = (rho[::-1], p[::-1], -u[::-1], v[::-1])
+        elif case == "bottom":   # swap x and y
+            f = (rho.T, p.T, v.T, u.T)
+        else:                    # top: swap x and y, then mirror
+            f = (rho.T[::-1], p.T[::-1], -v.T[::-1], u.T[::-1])
+        fields[case] = f
+    ref = fields["left"]
+    for case in ["right", "bottom", "top"]:
+        d = max(float(np.max(np.abs(a - b))) for a, b in zip(fields[case], ref))
+        res.check(f"{case} vs left (max abs difference)", d, d < 1e-12, "< 1e-12")
+    # the right wall of outflow_left blocks inflow: the gas next to it is slowed down clearly
+    u_wall = float(np.mean(ref[2][-1]))
+    res.check("blocked wall slows the flow: |u_wall + 0.5|", abs(u_wall + 0.5), abs(u_wall + 0.5) > 0.1, "> 0.1")
+    return res
+
 def test_case(exe, name, workdir):
+    if name == "outflow_walls":  #runs four cases and compares them with each other
+        return test_outflow_walls(exe, workdir)
     res = Result(name)
     code, log, dt, outdir = run_case(exe, name, workdir)
     res.runtime = dt
@@ -462,7 +502,7 @@ ALL = ["sod_uniform", "sod_smr", "sod_amr", "sod_amr_level2",
        "sod_vanleer", "sod_superbee", "sod_mc", "sod_primitive",
        "dirichlet_contact_x", "dirichlet_contact_y", "contact_primitive",
        "sedov_uniform", "sedov_amr", "disk_equilibrium", "disk_stirred",
-       "invalid_params", "invalid_dirichlet"]
+       "outflow_walls", "invalid_params", "invalid_dirichlet"]
 
 def main():
     ap = argparse.ArgumentParser(description="Szuchydro test suite")

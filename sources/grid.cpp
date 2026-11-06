@@ -117,10 +117,10 @@ void ApplyPhysicalBoundaryConditions(Mesh& mesh, const GridBC& bc) {
               break;
             case BCType::Outflow:{
               for(size_t k = 0; k < NVAR; ++k) data(b, i, ghost_j, k) = data(b, i, js, k);
-              Real mn = data(b, i, ghost_j, 1);
-              if(mn < 0.0){ //inflow -> remove normal momentum and its kinetic energy
+              Real mn = data(b, i, ghost_j, 2);
+              if(mn > 0.0){ //inflow -> remove normal momentum and its kinetic energy
                 data(b, i, ghost_j, 3) -= 0.5*mn*mn/data(b, i, ghost_j, 0);
-                data(b, i, ghost_j, 1) = 0.0;
+                data(b, i, ghost_j, 2) = 0.0;
               }
               break;
             }
@@ -147,10 +147,10 @@ void ApplyPhysicalBoundaryConditions(Mesh& mesh, const GridBC& bc) {
               break;
             case BCType::Outflow:{
               for(size_t k = 0; k < NVAR; ++k) data(b, i, ghost_j, k) = data(b, i, je, k);
-              Real mn = data(b, i, ghost_j, 1);
+              Real mn = data(b, i, ghost_j, 2);
               if(mn < 0.0){ //inflow -> remove normal momentum and its kinetic energy
                 data(b, i, ghost_j, 3) -= 0.5*mn*mn/data(b, i, ghost_j, 0);
-                data(b, i, ghost_j, 1) = 0.0;
+                data(b, i, ghost_j, 2) = 0.0;
               }
               break;
             }

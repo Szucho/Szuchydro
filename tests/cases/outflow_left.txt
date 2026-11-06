@@ -1,0 +1,28 @@
+# Outflow walls, symmetry test (flow towards the left wall): uniform gas streams towards one wall.
+# Outflow on both walls of that direction (one exit, one inflow-blocking), periodic otherwise.
+# The four outflow_* cases are the same problem rotated/mirrored and must agree to round-off.
+Nx 64
+Ny 16
+nx1_block 16
+nx2_block 16
+Nt 1000
+t0 0.0
+tf 0.4
+xmin 0.0
+xmax 1.0
+ymin 0.0
+ymax 0.25
+gamma 1.4
+cfl 0.4
+n_frames 2
+use_amr 0
+gas_profile uniform
+gas_rho0 1.0
+gas_p0 1.0
+gas_u0 -0.5
+gas_v0 0.0
+bc_left Outflow
+bc_right Outflow
+bc_bottom Periodic
+bc_top Periodic
+outdir outflow_left_out
