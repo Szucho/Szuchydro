@@ -50,17 +50,17 @@ void ApplyPhysicalBoundaryConditions(Mesh& mesh, const GridBC& bc) {
               break;
             case BCType::Closed:
               for(size_t k = 0; k < NVAR; ++k) data(b, ghost_i, j, k) = data(b, is + g, j, k);
-              data(b, ghost_i, j, 1) *= -1.0;
+              data(b, ghost_i, j, IM1) *= -1.0;
               break;
             case BCType::Dirichlet:
               for(size_t k = 0; k < NVAR; ++k) data(b, ghost_i, j, k) = bc_copy.left.Q_fixed[k];
               break;
             case BCType::Outflow:{
               for(size_t k = 0; k < NVAR; ++k) data(b, ghost_i, j, k) = data(b, is, j, k);
-              Real mn = data(b, ghost_i, j, 1);
+              Real mn = data(b, ghost_i, j, IM1);
               if(mn > 0.0){ //inflow -> remove normal momentum and its kinetic energy
-                data(b, ghost_i, j, 3) -= 0.5*mn*mn/data(b, ghost_i, j, 0);
-                data(b, ghost_i, j, 1) = 0.0;
+                data(b, ghost_i, j, IEN) -= 0.5*mn*mn/data(b, ghost_i, j, IDN);
+                data(b, ghost_i, j, IM1) = 0.0;
               }
               break;
             }
@@ -80,17 +80,17 @@ void ApplyPhysicalBoundaryConditions(Mesh& mesh, const GridBC& bc) {
               break;
             case BCType::Closed:
               for(size_t k = 0; k < NVAR; ++k) data(b, ghost_i, j, k) = data(b, ie - g, j, k);
-              data(b, ghost_i, j, 1) *= -1.0;
+              data(b, ghost_i, j, IM1) *= -1.0;
               break;
             case BCType::Dirichlet:
               for(size_t k = 0; k < NVAR; ++k) data(b, ghost_i, j, k) = bc_copy.right.Q_fixed[k];
               break;
             case BCType::Outflow:{
               for(size_t k = 0; k < NVAR; ++k) data(b, ghost_i, j, k) = data(b, ie, j, k);
-              Real mn = data(b, ghost_i, j, 1);
+              Real mn = data(b, ghost_i, j, IM1);
               if(mn < 0.0){ //inflow -> remove normal momentum and its kinetic energy
-                data(b, ghost_i, j, 3) -= 0.5*mn*mn/data(b, ghost_i, j, 0);
-                data(b, ghost_i, j, 1) = 0.0;
+                data(b, ghost_i, j, IEN) -= 0.5*mn*mn/data(b, ghost_i, j, IDN);
+                data(b, ghost_i, j, IM1) = 0.0;
               }
               break;
             }
@@ -110,17 +110,17 @@ void ApplyPhysicalBoundaryConditions(Mesh& mesh, const GridBC& bc) {
               break;
             case BCType::Closed:
               for(size_t k = 0; k < NVAR; ++k) data(b, i, ghost_j, k) = data(b, i, js + g, k);
-              data(b, i, ghost_j, 2) *= -1.0;
+              data(b, i, ghost_j, IM2) *= -1.0;
               break;
             case BCType::Dirichlet:
               for(size_t k = 0; k < NVAR; ++k) data(b, i, ghost_j, k) = bc_copy.bottom.Q_fixed[k];
               break;
             case BCType::Outflow:{
               for(size_t k = 0; k < NVAR; ++k) data(b, i, ghost_j, k) = data(b, i, js, k);
-              Real mn = data(b, i, ghost_j, 2);
+              Real mn = data(b, i, ghost_j, IM2);
               if(mn > 0.0){ //inflow -> remove normal momentum and its kinetic energy
-                data(b, i, ghost_j, 3) -= 0.5*mn*mn/data(b, i, ghost_j, 0);
-                data(b, i, ghost_j, 2) = 0.0;
+                data(b, i, ghost_j, IEN) -= 0.5*mn*mn/data(b, i, ghost_j, IDN);
+                data(b, i, ghost_j, IM2) = 0.0;
               }
               break;
             }
@@ -140,17 +140,17 @@ void ApplyPhysicalBoundaryConditions(Mesh& mesh, const GridBC& bc) {
               break;
             case BCType::Closed:
               for(size_t k = 0; k < NVAR; ++k) data(b, i, ghost_j, k) = data(b, i, je - g, k);
-              data(b, i, ghost_j, 2) *= -1.0;
+              data(b, i, ghost_j, IM2) *= -1.0;
               break;
             case BCType::Dirichlet:
               for(size_t k = 0; k < NVAR; ++k) data(b, i, ghost_j, k) = bc_copy.top.Q_fixed[k];
               break;
             case BCType::Outflow:{
               for(size_t k = 0; k < NVAR; ++k) data(b, i, ghost_j, k) = data(b, i, je, k);
-              Real mn = data(b, i, ghost_j, 2);
+              Real mn = data(b, i, ghost_j, IM2);
               if(mn < 0.0){ //inflow -> remove normal momentum and its kinetic energy
-                data(b, i, ghost_j, 3) -= 0.5*mn*mn/data(b, i, ghost_j, 0);
-                data(b, i, ghost_j, 2) = 0.0;
+                data(b, i, ghost_j, IEN) -= 0.5*mn*mn/data(b, i, ghost_j, IDN);
+                data(b, i, ghost_j, IM2) = 0.0;
               }
               break;
             }

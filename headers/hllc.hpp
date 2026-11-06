@@ -44,13 +44,13 @@ struct Primitive_Vals{
 KOKKOS_INLINE_FUNCTION
 static Primitive_Vals QtoPrim(const Vec4& Q, Real gamma){
   Primitive_Vals q;
-  q.rho = Q[0];
-  q.u = Q[1]/q.rho; //rho u / rho
-  q.v = Q[2]/q.rho; //rho v / rho
+  q.rho = Q[IDN];
+  q.u = Q[IM1]/q.rho; //rho u / rho
+  q.v = Q[IM2]/q.rho; //rho v / rho
 
-  //Q[3] = rho e_tot = rho(e_th + 0.5(u^2 + v^2)), e_th = 1/(gamma-1)k_BT/mu m_p
+  //Q[IEN] = rho e_tot = rho(e_th + 0.5(u^2 + v^2)), e_th = 1/(gamma-1)k_BT/mu m_p
   //p = rho k_BT/mu m_p ideal gas law -> p = (gamma-1)*e_th = (gamma-1)rho(e_tot-0.5(u^2+v^2))
-  q.p = (gamma - 1.0)*(Q[3] - q.rho*0.5*(q.u*q.u + q.v*q.v));
+  q.p = (gamma - 1.0)*(Q[IEN] - q.rho*0.5*(q.u*q.u + q.v*q.v));
 
   if(q.rho < 0.0 || q.p < 0.0){
     //exceptions are host-only: still catchable in main on the Serial backend, abort on device
@@ -66,7 +66,7 @@ static Primitive_Vals QtoPrim(const Vec4& Q, Real gamma){
 KOKKOS_INLINE_FUNCTION
 static Vec4 xFlux(const Vec4& Q, Real gamma){
   Primitive_Vals q = QtoPrim(Q, gamma);
-  Real e_tot = Q[3]/q.rho;
+  Real e_tot = Q[IEN]/q.rho;
   Real h_tot = e_tot + q.p/q.rho;
   //Fx = (rho u, rho u^2 + p, rho u v, rho u h_tot)
   return Vec4{
@@ -97,7 +97,7 @@ static Vec4 Qtilde(const Vec4& Q, Real gamma, Real SK, Real Sstar){
   //Q is Q_K with K=L || K=R => q is also q_k
   Primitive_Vals q = QtoPrim(Q, gamma);
   Real mul = q.rho*(SK - q.u)/(SK - Sstar);
-  Real E = Q[3];
+  Real E = Q[IEN];
   //Toro 10.39
   return Vec4{
     mul,
@@ -137,7 +137,7 @@ Vec4 FluxhllcX(const Vec4& QL, const Vec4& QR, Real gamma){
 KOKKOS_INLINE_FUNCTION
 static Vec4 rotateQxy(const Vec4& Q){
   //[rho, rho*u, rho*v, E]  ->  [rho, rho*v, rho*u, E]
-  return Vec4{Q[0], Q[2], Q[1], Q[3]};
+  return Vec4{Q[IDN], Q[IM2], Q[IM1], Q[IEN]};
 }
 
 KOKKOS_INLINE_FUNCTION
@@ -150,5 +150,5 @@ Vec4 FluxhllcY(const Vec4& QL, const Vec4& QR, Real gamma){
   Vec4 Frot = FluxhllcX(QL_rot, QR_rot, gamma);
 
   //rotate flux back:  G = [rho*v, rho*u*v, rho*v^2+p, (E+p)*v]
-  return Vec4{Frot[0], Frot[2], Frot[1], Frot[3]};
+  return Vec4{Frot[IDN], Frot[IM2], Frot[IM1], Frot[IEN]};
 }

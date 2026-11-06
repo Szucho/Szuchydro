@@ -22,6 +22,11 @@ using MemorySpace    = ExecutionSpace::memory_space;
 //multi-dimensional Kokkos View aliases for block-structured grid management
 using View1D = Kokkos::View<Real*, Kokkos::LayoutRight, MemorySpace>;
 using View3D = Kokkos::View<Real***, Kokkos::LayoutRight, MemorySpace>;
+//indices of vars in state vector
+//conserved vars
+enum ConsIndex : int {IDN = 0, IM1 = 1, IM2 = 2, IEN = 3};
+//primitive vars
+enum PrimIndex : int {IU = 1, IV = 2, IP = 3};
 using View4D = Kokkos::View<Real****, Kokkos::LayoutRight, MemorySpace>;
 
 using IntView2D = Kokkos::View<int**, Kokkos::LayoutRight, MemorySpace>;

@@ -552,7 +552,7 @@ void Mesh::CaptureInitialState(){
   Kokkos::parallel_for("CaptureInitialState",
     Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0, 0, 0}, {n_active, nx1 + 2*nghost, nx2 + 2*nghost}),
     KOKKOS_LAMBDA(int b, int i, int j){
-      rho_init(b, i, j) = data(b, i, j, 0); //density is variable index 0
+      rho_init(b, i, j) = data(b, i, j, IDN); //density is variable index 0
     }
   );
   Kokkos::fence();

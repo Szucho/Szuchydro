@@ -49,10 +49,10 @@ Real compute_cfl_dt(Mesh& mesh, Real gamma, Real cfl_max){
         q_cell[k] = data(b, i, j, k);
       }
 
-      Real rho = q_cell[0];
-      Real u = q_cell[1]/rho;
-      Real v = q_cell[2]/rho;
-      Real p = (gamma - 1.0)*(q_cell[3] - rho*0.5*(u*u + v*v));
+      Real rho = q_cell[IDN];
+      Real u = q_cell[IM1]/rho;
+      Real v = q_cell[IM2]/rho;
+      Real p = (gamma - 1.0)*(q_cell[IEN] - rho*0.5*(u*u + v*v));
       Real cs = Kokkos::sqrt(gamma*p/rho);
 
       Real speed = (Kokkos::abs(u) + cs)/dx1 + (Kokkos::abs(v) + cs)/dx2;
@@ -200,9 +200,9 @@ double compute_boundary_outflow(Mesh& mesh, size_t k) {
 //relative central density gradient max(|d rho/dx|, |d rho/dy|)/rho at cell (i, j), used by the AMR criteria
 KOKKOS_INLINE_FUNCTION
 Real rel_density_gradient(const View4D& data, int b, int i, int j){
-  Real rho_ij = data(b, i, j, 0);
-  Real grad_x = Kokkos::abs(data(b, i + 1, j, 0) - data(b, i - 1, j, 0)) / (2.0 * rho_ij + 1e-12);
-  Real grad_y = Kokkos::abs(data(b, i, j + 1, 0) - data(b, i, j - 1, 0)) / (2.0 * rho_ij + 1e-12);
+  Real rho_ij = data(b, i, j, IDN);
+  Real grad_x = Kokkos::abs(data(b, i + 1, j, IDN) - data(b, i - 1, j, IDN))/(2.0*rho_ij + 1e-12);
+  Real grad_y = Kokkos::abs(data(b, i, j + 1, IDN) - data(b, i, j - 1, IDN))/(2.0*rho_ij + 1e-12);
   return Kokkos::max(grad_x, grad_y);
 }
 
@@ -319,11 +319,11 @@ int main(int argc, char* argv[]){
     Kokkos::parallel_reduce("CheckStates",
       Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0, 0, 0}, {n_act, nx1_b + 2*ng, nx2_b + 2*ng}),
       KOKKOS_LAMBDA(int b, int i, int j, int& bad){
-        Real rho = data_check(b, i, j, 0);
-        Real mom_u = data_check(b, i, j, 1);
-        Real mom_v = data_check(b, i, j, 2);
-        Real E = data_check(b, i, j, 3);
-        Real p = (gamma - 1.0) * (E - 0.5 * (mom_u * mom_u + mom_v * mom_v) / (rho > 1e-12 ? rho : 1e-12));
+        Real rho = data_check(b, i, j, IDN);
+        Real mom_u = data_check(b, i, j, IM1);
+        Real mom_v = data_check(b, i, j, IM2);
+        Real E = data_check(b, i, j, IEN);
+        Real p = (gamma - 1.0)*(E - 0.5*(mom_u*mom_u + mom_v*mom_v)/(rho > 1e-12 ? rho : 1e-12));
         
         if (!(rho > 0.0) || !(p > 0.0)){
           //this will print the exact block slot and cell coordinates causing the failure!

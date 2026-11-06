@@ -42,16 +42,16 @@ Vec4 limited_slope(const Vec4& qm1, const Vec4& q0, const Vec4& qp1, Real dk, in
 //(rho, rho u, rho v, E) -> (rho, u, v, p)
 KOKKOS_INLINE_FUNCTION
 Vec4 cons_to_prim(const Vec4& q, Real gamma){
-  Real rho = q[0];
-  Real u = q[1]/rho, v = q[2]/rho;
-  Real p = (gamma - 1.0)*(q[3] - 0.5*rho*(u*u + v*v));
+  Real rho = q[IDN];
+  Real u = q[IM1]/rho, v = q[IM2]/rho;
+  Real p = (gamma - 1.0)*(q[IEN] - 0.5*rho*(u*u + v*v));
   return Vec4{rho, u, v, p};
 }
 
 //(rho, u, v, p) -> (rho, rho u, rho v, E)
 KOKKOS_INLINE_FUNCTION
 Vec4 prim_to_cons(const Vec4& w, Real gamma){
-  Real rho = w[0], u = w[1], v = w[2], p = w[3];
+  Real rho = w[IDN], u = w[IU], v = w[IV], p = w[IP];
   return Vec4{rho, rho*u, rho*v, p/(gamma - 1.0) + 0.5*rho*(u*u + v*v)};
 }
 

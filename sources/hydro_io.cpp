@@ -233,10 +233,10 @@ void init_cond(Mesh& mesh, const SimParams& par){
     if(profile == "uniform"){
       Kokkos::parallel_for("InitUniform", Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {total_i, total_j}),
         KOKKOS_LAMBDA(int i, int j) {
-          data(b_slot, i, j, 0) = rho0;
-          data(b_slot, i, j, 1) = rho0*u0;
-          data(b_slot, i, j, 2) = rho0*v0;
-          data(b_slot, i, j, 3) = p0/(gamma - 1.0) + 0.5*rho0*(u0*u0 + v0*v0);
+          data(b_slot, i, j, IDN) = rho0;
+          data(b_slot, i, j, IM1) = rho0*u0;
+          data(b_slot, i, j, IM2) = rho0*v0;
+          data(b_slot, i, j, IEN) = p0/(gamma - 1.0) + 0.5*rho0*(u0*u0 + v0*v0);
         }
       );
     }else if(profile == "Sod_x"){
@@ -257,10 +257,10 @@ void init_cond(Mesh& mesh, const SimParams& par){
           Real v   = (x < x_mid) ? v_L   : v_R;
           Real E   = p/(gamma - 1.0) + 0.5*rho*(u*u + v*v);
 
-          data(b_slot, i, j, 0) = rho;
-          data(b_slot, i, j, 1) = rho*u;
-          data(b_slot, i, j, 2) = rho*v;
-          data(b_slot, i, j, 3) = E;
+          data(b_slot, i, j, IDN) = rho;
+          data(b_slot, i, j, IM1) = rho*u;
+          data(b_slot, i, j, IM2) = rho*v;
+          data(b_slot, i, j, IEN) = E;
         }
       );
     }else if(profile == "sedov"){
@@ -275,10 +275,10 @@ void init_cond(Mesh& mesh, const SimParams& par){
           Real x = x1min + (i - is + 0.5)*dx1 - xc;  
           Real y = x2min + (j - js + 0.5)*dx2 - yc;
           Real p = (x*x + y*y < r_dep*r_dep) ? p0 + p_in : p0; //ambient + blast energy
-          data(b_slot, i, j, 0) = rho0;
-          data(b_slot, i, j, 1) = 0.0;
-          data(b_slot, i, j, 2) = 0.0;
-          data(b_slot, i, j, 3) = p/(gamma - 1.0);
+          data(b_slot, i, j, IDN) = rho0;
+          data(b_slot, i, j, IM1) = 0.0;
+          data(b_slot, i, j, IM2) = 0.0;
+          data(b_slot, i, j, IEN) = p/(gamma - 1.0);
         }
       );
     }else{

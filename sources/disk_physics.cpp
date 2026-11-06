@@ -57,10 +57,10 @@ void InitDiskRz(Mesh& mesh, const DiskModel& m, Real gamma){
         Real rmin = rfl*rho0*std::pow(R, -qD);
         if(rho < rmin){ rho = rmin; P = rho*T; }
         if(P < pfl) P = pfl;
-        data(slot, i, j, 0) = rho;
-        data(slot, i, j, 1) = 0.0;
-        data(slot, i, j, 2) = 0.0;
-        data(slot, i, j, 3) = P/(gamma - 1.0);
+        data(slot, i, j, IDN) = rho;
+        data(slot, i, j, IM1) = 0.0;
+        data(slot, i, j, IM2) = 0.0;
+        data(slot, i, j, IEN) = P/(gamma - 1.0);
       });
   }
   Kokkos::fence();
@@ -145,26 +145,26 @@ void AddDiskSourceTerms(Mesh& mesh, const DiskModel& m, const StirringForce& sti
       const Real rho_i = rho0*std::pow(R, -p.q_D)*std::exp(S)/(h*h);
 
       //current primitives
-      Real rho = data(s, i, j, 0);
-      Real u = data(s, i, j, 1)/rho;
-      Real v = data(s, i, j, 2)/rho;
-      Real eint = data(s, i, j, 3) - 0.5*rho*(u*u + v*v);
+      Real rho = data(s, i, j, IDN);
+      Real u = data(s, i, j, IM1)/rho;
+      Real v = data(s, i, j, IM2)/rho;
+      Real eint = data(s, i, j, IEN) - 0.5*rho*(u*u + v*v);
 
-      //1) corona replenishment (velocity kept, internal energy per mass kept)
+      //corona replenishment (velocity kept, internal energy per mass kept)
       {
         Real fr = ww*(1.0 - std::exp(-dt*Om/p.corona_tau));
         Real rho_new = rho + (rho_i - rho)*fr;
         eint *= rho_new/rho;
         rho = rho_new;
       }
-      //2) equilibrium force grad(P_init)/rho_init
+      //equilibrium force grad(P_init)/rho_init
       {
         Real fR = (eta*eta - (p.q_D + 1.0)*h*h)/(R*R);
         Real fz = -eta/(R*R);
         u += dt*fR;
         v += dt*fz;
       }
-      //3) stirring: solenoidal in (xi = ln R, eta) space, disk band only
+      //stirring: solenoidal in (xi = ln R, eta) space, disk band only
       if(wd > 1e-3){
         const Real xi = std::log(R);
         Real axi = 0.0, aet = 0.0;
@@ -176,7 +176,8 @@ void AddDiskSourceTerms(Mesh& mesh, const DiskModel& m, const StirringForce& sti
           axi +=  ke*d;   // dpsi/deta
           aet += -kx*d;   //-dpsi/dxi
         }
-        //OU forcing a with drag time tau_d gives v_rms ~ a*sqrt(tau_c*tau_d); choose a so v_rms ~ stir_amp*c_s
+        //OU forcing a with drag time tau_d gives v_rms ~ a*sqrt(tau_c*tau_d);
+        //choose a so v_rms ~ stir_amp*c_s
         Real cs_d = p.h_disk/std::sqrt(R);
         Real acc = p.stir_amp*cs_d*std::sqrt(Om/(p.stir_tcorr*p.stir_damp))*wd*norm;
         u += dt*acc*axi;
@@ -208,10 +209,10 @@ void AddDiskSourceTerms(Mesh& mesh, const DiskModel& m, const StirringForce& sti
       Real emin = p.p_floor/(gamma - 1.0);
       if(eint < emin) eint = emin;
 
-      data(s, i, j, 0) = rho;
-      data(s, i, j, 1) = rho*u;
-      data(s, i, j, 2) = rho*v;
-      data(s, i, j, 3) = eint + 0.5*rho*(u*u + v*v);
+      data(s, i, j, IDN) = rho;
+      data(s, i, j, IM1) = rho*u;
+      data(s, i, j, IM2) = rho*v;
+      data(s, i, j, IEN) = eint + 0.5*rho*(u*u + v*v);
     });
 }
 
@@ -266,11 +267,11 @@ void ApplyDiskBoundaries(Mesh& mesh, const DiskModel& m, Real gamma){
       const Real rmin = p.rho_floor*rho0*std::pow(R, -p.q_D);
       if(rho < rmin){ rho = rmin; P = rho*h*h/R; }
       //velocities from the regular BC
-      const Real rho_old = data(s, i, j, 0);
-      const Real u = data(s, i, j, 1)/rho_old, v = data(s, i, j, 2)/rho_old;
-      data(s, i, j, 0) = rho;
-      data(s, i, j, 1) = rho*u;
-      data(s, i, j, 2) = rho*v;
-      data(s, i, j, 3) = P/(gamma - 1.0) + 0.5*rho*(u*u + v*v);
+      const Real rho_old = data(s, i, j, IDN);
+      const Real u = data(s, i, j, IM1)/rho_old, v = data(s, i, j, IM2)/rho_old;
+      data(s, i, j, IDN) = rho;
+      data(s, i, j, IM1) = rho*u;
+      data(s, i, j, IM2) = rho*v;
+      data(s, i, j, IEN) = P/(gamma - 1.0) + 0.5*rho*(u*u + v*v);
     });
 }
