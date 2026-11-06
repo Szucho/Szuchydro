@@ -16,6 +16,7 @@
 #include "mesh.hpp"
 #include "hllc.hpp"
 #include "slope_limiters.hpp"
+#include "reconstruction.hpp"
 #include "hydro_io.hpp"
 #include "disk_physics.hpp"
 
@@ -64,7 +65,7 @@ Real compute_cfl_dt(Mesh& mesh, Real gamma, Real cfl_max){
 }
 
 //explicit 2D Euler Finite Volume timestep
-void step_hydro_solver(Mesh& mesh, Real dt, Real gamma){
+void step_hydro_solver(Mesh& mesh, Real dt, Real gamma, const ReconOptions& recon){
   int n_active = mesh.num_active_blocks();
   if(n_active == 0) return;
 
@@ -81,6 +82,8 @@ void step_hydro_solver(Mesh& mesh, Real dt, Real gamma){
   View1D block_dx1 = mesh.get_block_dx1_view();
   View1D block_dx2 = mesh.get_block_dx2_view();
 
+  const ReconOptions opt = recon; //plain struct copied into kernel
+  
   Kokkos::parallel_for(
     "StepHydroSolver",
     Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0, is, js}, {n_active, ie + 1, je + 1}),
@@ -105,28 +108,12 @@ void step_hydro_solver(Mesh& mesh, Real dt, Real gamma){
         qjp2[k] = q_old(b, i, j + 2, k);
       }
 
-      Vec4 sigma_im1_x = sigma_minmod(qim2, qim1, qi, dx);
-      Vec4 sigma_i_x   = sigma_minmod(qim1, qi,   qip1, dx);
-      Vec4 sigma_ip1_x = sigma_minmod(qi,   qip1, qip2, dx);
-
-      Vec4 sigma_jm1_y = sigma_minmod(qjm2, qjm1, qi, dy);
-      Vec4 sigma_j_y   = sigma_minmod(qjm1, qi,   qjp1, dy);
-      Vec4 sigma_jp1_y = sigma_minmod(qi,   qjp1, qjp2, dy);
-
+      //face states
       Vec4 ql_imh, qr_imh, ql_iph, qr_iph;
       Vec4 ql_jmh, qr_jmh, ql_jph, qr_jph;
 
-      for(size_t k = 0; k < NVAR; ++k){
-        ql_imh[k] = qim1[k] + 0.5*dx*sigma_im1_x[k];
-        qr_imh[k] = qi[k]   - 0.5*dx*sigma_i_x[k];
-        ql_iph[k] = qi[k]   + 0.5*dx*sigma_i_x[k];
-        qr_iph[k] = qip1[k] - 0.5*dx*sigma_ip1_x[k];
-
-        ql_jmh[k] = qjm1[k] + 0.5*dy*sigma_jm1_y[k];
-        qr_jmh[k] = qi[k]   - 0.5*dy*sigma_j_y[k];
-        ql_jph[k] = qi[k]   + 0.5*dy*sigma_j_y[k];
-        qr_jph[k] = qjp1[k] - 0.5*dy*sigma_jp1_y[k];
-      }
+      reconstruct_faces(qim2, qim1, qi, qip1, qip2, dx, gamma, opt, ql_imh, qr_imh, ql_iph, qr_iph);
+      reconstruct_faces(qjm2, qjm1, qi, qjp1, qjp2, dy, gamma, opt, ql_jmh, qr_jmh, ql_jph, qr_jph);
 
       Vec4 fx_imh = FluxhllcX(ql_imh, qr_imh, gamma);
       Vec4 fx_iph = FluxhllcX(ql_iph, qr_iph, gamma);
@@ -242,6 +229,7 @@ int main(int argc, char* argv[]){
     bc.bottom.type = parseBC(par.bc_bottom);
     bc.top.type    = parseBC(par.bc_top);
     validateBC(bc);
+    setDirichletStates(bc, par);
 
     inputs.periodic_x1 = (bc.left.type == BCType::Periodic);
     inputs.periodic_x2 = (bc.bottom.type == BCType::Periodic);
@@ -327,21 +315,28 @@ int main(int argc, char* argv[]){
     int ng = mesh.inputs().nghost;
     Real gamma = par.gamma;
 
-    Kokkos::parallel_for("CheckStates",
+    int n_invalid = 0;
+    Kokkos::parallel_reduce("CheckStates",
       Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0, 0, 0}, {n_act, nx1_b + 2*ng, nx2_b + 2*ng}),
-      KOKKOS_LAMBDA(int b, int i, int j){
+      KOKKOS_LAMBDA(int b, int i, int j, int& bad){
         Real rho = data_check(b, i, j, 0);
         Real mom_u = data_check(b, i, j, 1);
         Real mom_v = data_check(b, i, j, 2);
         Real E = data_check(b, i, j, 3);
         Real p = (gamma - 1.0) * (E - 0.5 * (mom_u * mom_u + mom_v * mom_v) / (rho > 1e-12 ? rho : 1e-12));
         
-        if (rho <= 0.0 || p <= 0.0){
+        if (!(rho > 0.0) || !(p > 0.0)){
           //this will print the exact block slot and cell coordinates causing the failure!
           printf("INVALID STATE at block %d, cell (%d,%d): rho=%f, p=%f\n", b, i, j, rho, p);
+          bad += 1;
         }
-      }
+      }, n_invalid
     );
+    if(n_invalid > 0){
+      throw std::runtime_error("initial state has " + std::to_string(n_invalid) +
+                               " cells (ghost cells included) with rho <= 0 or p <= 0: "
+                               "check the initial condition and the boundary states");
+    }
     Kokkos::fence();
 
     Real t0 = par.t0;
@@ -409,6 +404,10 @@ int main(int argc, char* argv[]){
 
         //CFL every step (also right after regridding!!! OTHERWISE UNSTABLE, DO NOT REMOVE)
         Real dt_cfl = compute_cfl_dt(mesh, par.gamma, par.cfl);
+        if(!std::isfinite(dt_cfl) || dt_cfl <= 0.0) //a blown-up state would otherwise loop forever
+          throw std::runtime_error("invalid time step dt = " + std::to_string(dt_cfl) +
+                                  " at t = " + std::to_string(t) +
+                                  ": the solution contains non-physical values (NaN, rho <= 0 or p <= 0)");
         dt = std::min(dt_cfl, tf - t);
 
         draw_progress(t, n == 0);
@@ -419,7 +418,7 @@ int main(int argc, char* argv[]){
           t_next_save += t_save;
         }
 
-        step_hydro_solver(mesh, dt, par.gamma);
+        step_hydro_solver(mesh, dt, par.gamma, par.recon);
         ApplyReflux(mesh, dt);
         if(use_disk){
           stirring -> Advance(dt);
@@ -474,7 +473,7 @@ int main(int argc, char* argv[]){
       exit_code = 1;
     }
   }catch(const std::exception& e){
-    std::cerr << "\n[Error] " << e.what() << "\n";
+    std::cerr << "\n[ERROR] " << e.what() << "\n";
     exit_code = 1;
   }
   Kokkos::finalize();

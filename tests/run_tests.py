@@ -8,6 +8,10 @@ Physics problems checks:
     sod_amr             same with adaptive refinement -> test AMR remap + refluxing
     sod_amr_level2      AMR capped at amr_max_level 2 (tests AMR parameters)
     invalid_params      bad input must stop with 'Parameter error' and an exit code 1
+    sod_vanleer, sod_superbee, sod_mc, sod_primitive   Sod with each limiter / primitive reconstruction
+    dirichlet_contact_x/_y  contact carried in through a Dirichlet wall
+    contact_primitive   the same with primitive reconstruction: u and p uniform to round-off
+    invalid_dirichlet   Dirichlet wall with a missing state component must stop with 'Parameter error'
     sedov_uniform       2D Sedov-Taylor blast vs analytical solution + symmetry + conservation
     sedov_amr           same with AMR from coarse base grid (2D refinement in both directions)
     disk_equilibrium    disk_Rz without stirring/wind must stay in hydrostatic equilibrium
@@ -27,6 +31,7 @@ import argparse, hashlib, json, os, shutil, struct, subprocess, sys, tempfile, t
 import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+TIMEOUT_S = 600  # per test, the slowest test takes about 10 s
 CASES = os.path.join(HERE, "cases")
 NVAR = 4
 HDR, BLK = "<dQ", "<iqqddddQQ" #16, 72 byte
@@ -230,6 +235,42 @@ def check_sod(res, frames, gamma, l1_limit):
     res.check("final time reached", t, abs(t - 0.2) < 1e-12, "= 0.2")
     check_conservation(res, frames, pl=1.0, pr=0.1)
 
+def check_sod_contact_width(res, frames, max_cells):
+    """width of the Sod contact (rho between 0.29 and 0.40 around x = 0.185 at t = 0.2).
+    minmod with conserved reconstruction smears it over 4 cells; sharper limiters use fewer."""
+    x, y, Q = stitch(frames[-1])
+    rho = Q[0].mean(axis=1)
+    w = int(np.sum((x > 0.05) & (x < 0.30) & (rho > 0.29) & (rho < 0.40)))
+    res.check("contact width [cells]", w, w <= max_cells, f"<= {max_cells}")
+
+def check_contact(res, frames, gamma, axis, uniform_tol):
+    """Dirichlet inflow: rho = 2 enters a uniform flow rho = 1, speed 1, p = 1 along 'axis'.
+    Exact: the contact sits at 0.5 at t = 0.5; u and p stay uniform; the box gains exactly
+    (2 - 1)*L*t mass and (4.5 - 4.0)*L*t energy (boundary fluxes rho*u and (E + p)*u)."""
+    t = frames[-1][0]
+    x, y, Q = stitch(frames[-1])
+    rho, u, v, p = primitives(Q, gamma)
+    if axis == "x":
+        coord, prof, vel, vtr = x, rho.mean(axis=1), u, v
+    else:
+        coord, prof, vel, vtr = y, rho.mean(axis=0), v, u
+    d = coord[1] - coord[0]
+    k = np.nonzero(prof < 1.5)[0][0]  # first cell where rho has dropped below the midpoint
+    pos = coord[k - 1] + (1.5 - prof[k - 1])*d/(prof[k] - prof[k - 1])
+    err = abs(pos - t)/d                     # contact moves at speed 1, so it should be at t
+    res.check("contact position error [cells]", err, err < 0.5, "< 0.5")
+    for name, f in [("max |p - 1|", p - 1.0), ("max |u_normal - 1|", vel - 1.0), ("max |u_transverse|", vtr)]:
+        val = float(np.abs(f).max())
+        res.check(name, val, val < uniform_tol, f"< {uniform_tol:g}")
+    _, blocks, _ = frames[0]
+    L = (max(b[6] for b in blocks) - min(b[5] for b in blocks)) if axis == "x" else \
+        (max(b[4] for b in blocks) - min(b[3] for b in blocks))
+    t0, t1 = totals(frames[0]), totals(frames[-1])
+    for k_, name, flux in [(0, "mass", 1.0), (3, "energy", 0.5)]:
+        rel = abs((t1[k_] - t0[k_])/(flux*L*t) - 1)
+        res.check(f"{name} inflow vs exact boundary flux", rel, rel < 1e-12, "< 1e-12 (relative)")
+
+
 def check_sedov(res, frames, gamma, p_amb, l1_limit):
     #2D (cylindrical, j = 2) Sedov-Taylor blast centred in the domain
     xi, srho, _, _, alpha = sedov_profile(2, gamma)
@@ -288,7 +329,12 @@ def run_case(exe, name, workdir):
     src = os.path.join(CASES, name + ".txt") #input file
     shutil.copy(src, workdir)
     t0 = time.time()
-    r = subprocess.run([exe, name + ".txt"], cwd=workdir, capture_output=True, text=True) #run it
+    try: #run sim, hanging run (e.g. caused by Nan somewhere) becomes a clean failure
+        r = subprocess.run([exe, name + ".txt"], cwd=workdir, capture_output=True, text=True, timeout=TIMEOUT_S)
+    except subprocess.TimeoutExpired as e:
+        out = (e.stdout or b"") if isinstance(e.stdout, bytes) else (e.stdout or "").encode()
+        r = subprocess.CompletedProcess(e.cmd, -999, out.decode(errors="replace"), 
+                                        f"\nTIMEOUT: run killed after {TIMEOUT_S} s\n")
     dt = time.time() - t0
     log = r.stdout + r.stderr #we capture the output
     with open(os.path.join(workdir, name + ".log"), "w") as f:
@@ -306,7 +352,7 @@ def test_case(exe, name, workdir):
     res.runtime = dt
     res.outdir = outdir
 
-    if name == "invalid_params": #this one is supposed to fail
+    if name.startswith("invalid_"): #these are supposed to fail
         res.check("non-zero exit code", code, code != 0, "!= 0")
         found = "Parameter error" in log
         res.check("'Parameter error' message", int(found), found, "= 1")
@@ -317,7 +363,7 @@ def test_case(exe, name, workdir):
         res.log_tail = "\n".join(log.replace("\r", "\n").splitlines()[-15:])
         return res
 
-    bad = [l for l in log.replace("\r", "\n").splitlines() if "INVALID" in l or "ERROR" in l]
+    bad = [l for l in log.replace("\r", "\n").splitlines() if "INVALID" in l.upper() or "ERROR" in l.upper()]
     res.check("no INVALID/ERROR in log", len(bad), not bad, "= 0")
     gfile = os.path.join(outdir, "grid.bin") if outdir else ""
     frames = read_frames(gfile) if os.path.isfile(gfile) else []
@@ -341,6 +387,24 @@ def test_case(exe, name, workdir):
         check_sod(res, frames, gamma, l1_limit=8e-3)
         lv = max(b[0] for b in frames[-1][1])
         res.check("max level over all snapshots", lv, lv == 2, "= 2")
+    #each option must leave a fingerprint that the default 
+    #cannot produce, so a silently ignored option fails the test
+    elif name == "sod_vanleer":
+        check_sod(res, frames, gamma, l1_limit=2.1e-3)
+    elif name == "sod_mc":
+        check_sod(res, frames, gamma, l1_limit=2.1e-3)
+        check_sod_contact_width(res, frames, max_cells=2)
+    elif name == "sod_superbee":
+        check_sod(res, frames, gamma, l1_limit=4e-3)
+        check_sod_contact_width(res, frames, max_cells=2)
+    elif name == "sod_primitive":
+        check_sod(res, frames, gamma, l1_limit=2.2e-3)
+    elif name == "dirichlet_contact_x":
+        check_contact(res, frames, gamma, "x", uniform_tol=1e-8)
+    elif name == "dirichlet_contact_y":
+        check_contact(res, frames, gamma, "y", uniform_tol=1e-8)
+    elif name == "contact_primitive":
+        check_contact(res, frames, gamma, "x", uniform_tol=1e-12)
     elif name == "sedov_uniform":
         check_sedov(res, frames, gamma, p_amb=1e-5, l1_limit=0.18)
     elif name == "sedov_amr":
@@ -367,8 +431,11 @@ def test_case(exe, name, workdir):
     return res
 
 #test cases
-ALL = ["sod_uniform", "sod_smr", "sod_amr", "sod_amr_level2", "sedov_uniform", "sedov_amr",
-       "disk_equilibrium", "disk_stirred", "invalid_params"]
+ALL = ["sod_uniform", "sod_smr", "sod_amr", "sod_amr_level2",
+       "sod_vanleer", "sod_superbee", "sod_mc", "sod_primitive",
+       "dirichlet_contact_x", "dirichlet_contact_y", "contact_primitive",
+       "sedov_uniform", "sedov_amr", "disk_equilibrium", "disk_stirred",
+       "invalid_params", "invalid_dirichlet"]
 
 def main():
     ap = argparse.ArgumentParser(description="Szuchydro test suite")

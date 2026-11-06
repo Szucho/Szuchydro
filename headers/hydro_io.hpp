@@ -13,6 +13,7 @@
 #include "hydro_config.hpp"
 #include "grid.hpp"
 #include "mesh.hpp"
+#include "reconstruction.hpp"
 #include "disk_physics.hpp"
 
 /*
@@ -52,6 +53,11 @@ struct SimParams {
   int amr_interval = 5;  //check refinement level every amr interval steps
   Real amr_refine_tol = 0.05; //refine a block if the relative density jump exeeds this tolerance value
   Real amr_derefine_tol = 0.01; //derefine if it stays below this everywhere
+  //reconstruction: limiter (minmod, vanleer, superbee, mc) and variables (conserved, primitive)
+  ReconOptions recon;
+  //Dirichlet walls: fixed primitive state (rho, u, v, p), only used if that wall is Dirichlet
+  struct WallState { Real rho = 0.0, u = 0.0, v = 0.0, p = 0.0; };
+  WallState dir_left, dir_right, dir_bottom, dir_top;
   Real cfl = 0.4;
   //disk r--z problem:
   DiskParams disk;
@@ -70,3 +76,4 @@ void setupOutputDir(const std::string& dir);
 void writeMetadata(const std::string& outdir, const SimParams& par);
 std::ofstream openGridFile(const std::string& outdir, Mesh& mesh);
 void writeFrame(std::ofstream& f, Mesh& mesh, Real t);
+void setDirichletStates(GridBC& bc, const SimParams& p);

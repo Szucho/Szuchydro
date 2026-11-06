@@ -29,6 +29,10 @@ use_amr 1          # 0 = static mesh (refine lines below still apply)
 # max_blocks 1024        # block capacity; memory is allocated for all of them up front
 # refine -0.25 0.5 -0.0625 0.0625 1
 
+# --- reconstruction ---
+# limiter minmod          # minmod (default, most diffusive), vanleer, mc, superbee (sharpest contacts)
+# reconstruct conserved   # conserved (default) or primitive (rho, u, v, p; positive faces guaranteed)
+
 # --- physics ---
 gamma 1.4
 gas_profile Sod_x  # left: rho = 1, p = 1; right: rho = 0.125, p = 0.1

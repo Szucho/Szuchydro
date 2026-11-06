@@ -48,7 +48,7 @@ enum class BCType{Open, Closed, Periodic, Dirichlet, Outflow};
 //configuration container for an individual boundary wall
 struct BoundaryCondition{
   BCType type;
-  Vec4 Q_fixed; //Dirichlet boundary condition value
+  Vec4 Q_fixed{}; //Dirichlet boundary condition value
 };
 
 //container grouping boundary conditions for all four walls of a grid block

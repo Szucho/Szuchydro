@@ -83,6 +83,47 @@ SimParams readParams(const std::string& filename){ //reads in params.txt
   p.amr_interval = opti("amr_interval", p.amr_interval);
   p.amr_refine_tol = optd("amr_refine_tol", p.amr_refine_tol);
   p.amr_derefine_tol = optd("amr_derefine_tol", p.amr_derefine_tol);
+  
+  //reconstruction options
+  const std::string lim = has("limiter") ? get("limiter") : "minmod";
+  if     (lim == "minmod")   p.recon.limiter = LIM_MINMOD;
+  else if(lim == "vanleer")  p.recon.limiter = LIM_VANLEER;
+  else if(lim == "superbee") p.recon.limiter = LIM_SUPERBEE;
+  else if(lim == "mc")       p.recon.limiter = LIM_MC;
+  else throw std::runtime_error("Parameter error: unknown limiter '" + lim + "' (minmod, vanleer, superbee, mc)");
+  const std::string rec = has("reconstruct") ? get("reconstruct") : "conserved";
+  if     (rec == "conserved") p.recon.primitive = false;
+  else if(rec == "primitive") p.recon.primitive = true;
+  else throw std::runtime_error("Parameter error: unknown reconstruct '" + rec + "' (conserved, primitive)");
+
+  //Dirichlet wall states, only for Dirichlet BC and not allowed for any other
+  auto read_wall = [&](const std::string& wall, const std::string& type, SimParams::WallState& w){
+    const char* comp[4] = {"_rho", "_u", "_v", "_p"};
+    Real* dst[4] = {&w.rho, &w.u, &w.v, &w.p};
+    for(int c = 0; c < 4; ++c){
+      const std::string key = "bc_" + wall + comp[c];
+      if(type == "Dirichlet"){
+        if(!has(key)){ 
+          throw std::runtime_error("Parameter error: bc_" + wall + " is Dirichlet but " + key + " is missing");
+        }
+        *dst[c] = getd(key);
+      }else if(has(key)){
+        throw std::runtime_error("Parameter error: " + key + 
+                                  " is set but bc_" + wall + " is "
+                                  + type + ", not Dirichlet");
+      }
+    }
+    if(type == "Dirichlet" && (w.rho <= 0.0 || w.p <= 0.0)){
+      throw std::runtime_error("Parameter error: bc_" + wall + "_rho and bc_" + wall + "_p must be positive");
+    }
+  };
+
+  read_wall("left",   p.bc_left,   p.dir_left);
+  read_wall("right",  p.bc_right,  p.dir_right);
+  read_wall("bottom", p.bc_bottom, p.dir_bottom);
+  read_wall("top",    p.bc_top,    p.dir_top);
+
+
   p.sedov_E  = optd("sedov_E", p.sedov_E);
   p.sedov_r  = optd("sedov_r", p.sedov_r);
   DiskParams& d = p.disk;
@@ -320,4 +361,17 @@ void writeFrame(std::ofstream& f, Mesh& mesh, Real t){
       }
     }
   }
+}
+
+
+//Dirichlet walls: convert the primitive wall states from the parameter file to the
+//conserved ghost-cell values (other walls keep Q_fixed = 0, which is never used)
+void setDirichletStates(GridBC& bc, const SimParams& par){
+  auto set = [&](BoundaryCondition& w, const SimParams::WallState& s){
+    if(w.type == BCType::Dirichlet) w.Q_fixed = prim_to_cons(Vec4{s.rho, s.u, s.v, s.p}, par.gamma);
+  };
+  set(bc.left,   par.dir_left);
+  set(bc.right,  par.dir_right);
+  set(bc.bottom, par.dir_bottom);
+  set(bc.top,    par.dir_top);
 }

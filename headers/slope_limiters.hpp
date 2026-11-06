@@ -143,3 +143,27 @@ Vec4 sigma_van_leer(const Vec4& Qim1, const Vec4& Qi, const Vec4& Qip1, Real dk)
   }
   return sigma;
 }
+
+//monotonized central (MC, van Leer 1977): 
+//central slope, limited to twice the one-sided slopes
+//phi(r) = max[0, min(2r, (1+r)/2, 2)],  r = sL/sR,  sigma = phi(r)*sR
+//equivalently
+//sigma = sign(c) * min(|c|, 2|sL|, 2|sR|) with c = (sL + sR)/2, and 0 at extrema
+KOKKOS_INLINE_FUNCTION
+Real mc_one(Real qim1, Real qi, Real qip1, Real dk){
+  Real sL = (qi - qim1)/dk;
+  Real sR = (qip1 - qi)/dk;
+  if(sL*sR <= 0) return 0.0;
+  Real c = 0.5*(sL + sR);
+  Real m = Kokkos::fmin(Kokkos::abs(c), 2.0*Kokkos::fmin(Kokkos::abs(sL), Kokkos::abs(sR)));
+  return (c > 0.0) ? m : -m;
+}
+
+KOKKOS_INLINE_FUNCTION
+Vec4 sigma_mc(const Vec4& Qim1, const Vec4& Qi, const Vec4& Qip1, Real dk){
+  Vec4 sigma;
+  for(size_t i=0; i<4; i++){
+    sigma[i] = mc_one(Qim1[i], Qi[i], Qip1[i], dk);
+  }
+  return sigma;
+}
