@@ -3,8 +3,8 @@
 #include <vector>
 #include <random>
 #include <cmath>
-#include "hydro_config.hpp"
-#include "mesh.hpp"
+#include "core/hydro_config.hpp"
+#include "mesh/mesh.hpp"
 
 /*
  * Stylized protoplanetary-disk physics for an R-z (meridional) slice.

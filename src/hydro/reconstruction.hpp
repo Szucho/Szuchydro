@@ -1,7 +1,7 @@
 #pragma once
 
-#include "hydro_config.hpp"
-#include "slope_limiters.hpp"
+#include "core/hydro_config.hpp"
+#include "hydro/slope_limiters.hpp"
 
 
 /*

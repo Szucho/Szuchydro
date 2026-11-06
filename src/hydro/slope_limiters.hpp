@@ -3,8 +3,8 @@
 #include <cmath>
 #include <algorithm>
 #include <stdexcept>
-#include "hydro_config.hpp"
-#include "vector_ops.hpp"
+#include "core/hydro_config.hpp"
+#include "core/vector_ops.hpp"
 
 /*
  Slope limiter header file

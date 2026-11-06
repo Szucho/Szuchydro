@@ -1,7 +1,7 @@
 #pragma once
 
 #include <stdexcept>
-#include "hydro_config.hpp"
+#include "core/hydro_config.hpp"
 
 
 /*
@@ -14,7 +14,7 @@
  BoundaryCondition: sets the BCType, for Dirichlet we need Cell Q_fixed constant state vector
  GridBC: BC type at each grid wall
 
- validateBC and ApplyPhysicalBoundaryConditions are defined in grid.cpp
+ validateBC and ApplyPhysicalBoundaryConditions are defined in bvals.cpp
  
 
  MODIFIED 12.05.2026

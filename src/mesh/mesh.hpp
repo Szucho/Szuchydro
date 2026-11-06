@@ -5,7 +5,7 @@
 #include <cstdint>
 #include <array>
 #include <functional>
-#include "hydro_config.hpp"
+#include "core/hydro_config.hpp"
 
 /*
  * Adaptive Mesh Refinement (AMR) and topology header

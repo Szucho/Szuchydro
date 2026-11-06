@@ -11,14 +11,14 @@
 #include <Kokkos_Core.hpp>
 #include <memory>
 
-#include "hydro_config.hpp"
-#include "grid.hpp"
-#include "mesh.hpp"
-#include "hllc.hpp"
-#include "slope_limiters.hpp"
-#include "reconstruction.hpp"
-#include "hydro_io.hpp"
-#include "disk_physics.hpp"
+#include "core/hydro_config.hpp"
+#include "bvals/bvals.hpp"
+#include "mesh/mesh.hpp"
+#include "hydro/hllc.hpp"
+#include "hydro/slope_limiters.hpp"
+#include "hydro/reconstruction.hpp"
+#include "io/hydro_io.hpp"
+#include "physics/disk_physics.hpp"
 
 //CFL time step calculation (GPU/CPU parallel reduction)
 Real compute_cfl_dt(Mesh& mesh, Real gamma, Real cfl_max){

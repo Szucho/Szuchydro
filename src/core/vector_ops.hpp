@@ -1,7 +1,7 @@
 #pragma once
 
 #include <cstddef>
-#include "hydro_config.hpp"
+#include "core/hydro_config.hpp"
 
 //fixed 4D vector for Hydro state Q = [rho, rho*u, rho*v, E]
 

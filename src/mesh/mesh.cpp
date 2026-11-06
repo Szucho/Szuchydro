@@ -1,5 +1,5 @@
-#include "mesh.hpp"
-#include "slope_limiters.hpp"
+#include "mesh/mesh.hpp"
+#include "hydro/slope_limiters.hpp"
 #include <stdexcept>
 #include <algorithm>
 #include <string>

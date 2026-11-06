@@ -1,4 +1,4 @@
-#include "disk_physics.hpp"
+#include "physics/disk_physics.hpp"
 #include <stdexcept>
 
 //tabulate S(eta) = -int_0^eta eta'/h(eta')^2 deta'  (trapezoid, fine grid)

@@ -35,16 +35,23 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(Kokkos)
 
 
-add_subdirectory(mesh)
-
-#sources will all be needed for the executable
-file(GLOB SOURCES "sources/*.cpp")
+#mesh has its own static library
+add_subdirectory(src/mesh)
+#everything else in src/ goes into the executable
+#CONFIGURE_DEPENDS: new .cpp files are picked up automatically,
+#no need to re-run cmake
+file(GLOB SOURCES CONFIGURE_DEPENDS
+  "src/*.cpp"
+  "src/bvals/*.cpp"
+  "src/hydro/*.cpp"
+  "src/io/*.cpp"
+  "src/physics/*.cpp"
+  "src/pgen/*.cpp"
+)
 add_executable(szuchydro ${SOURCES})
 
-#link headers to mesh static library
-target_include_directories(szuchydro PRIVATE
-  ${CMAKE_CURRENT_SOURCE_DIR}/headers
-)
+#includes are written relative to src/, e.g. #include "hydro/hllc.hpp"
+target_include_directories(szuchydro PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(szuchydro PRIVATE szuchydro_mesh)
 
 include(CheckCXXCompilerFlag)

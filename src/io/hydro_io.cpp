@@ -1,5 +1,5 @@
-#include "hydro_io.hpp"
-#include "mesh.hpp"
+#include "io/hydro_io.hpp"
+#include "mesh/mesh.hpp"
 #include <stdexcept>
 #include <string>
 

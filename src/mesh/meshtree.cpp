@@ -1,4 +1,4 @@
-#include "mesh.hpp"
+#include "mesh/mesh.hpp"
 
 /*
  * Adaptive Mesh Refinement (AMR) quadtree implementation

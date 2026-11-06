@@ -10,11 +10,11 @@
 #include <iomanip>
 #include <cstdint>
 #include <vector>
-#include "hydro_config.hpp"
-#include "grid.hpp"
-#include "mesh.hpp"
-#include "reconstruction.hpp"
-#include "disk_physics.hpp"
+#include "core/hydro_config.hpp"
+#include "bvals/bvals.hpp"
+#include "mesh/mesh.hpp"
+#include "hydro/reconstruction.hpp"
+#include "physics/disk_physics.hpp"
 
 /*
  Input / Output header for Kokkos AMR Hydro Simulation

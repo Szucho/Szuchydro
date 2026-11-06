@@ -1,6 +1,6 @@
-#include "grid.hpp"
-#include "hydro_config.hpp"
-#include "mesh.hpp"
+#include "bvals/bvals.hpp"
+#include "core/hydro_config.hpp"
+#include "mesh/mesh.hpp"
 #include <stdexcept>
 
 //validates that periodic boundary conditions are symmetrically paired
