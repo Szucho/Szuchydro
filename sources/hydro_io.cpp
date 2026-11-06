@@ -1,7 +1,4 @@
 #include "hydro_io.hpp"
-#include "Kokkos_CheckUsage.hpp"
-#include "Kokkos_Macros.hpp"
-#include "Serial/Kokkos_Serial_Parallel_Range.hpp"
 #include "mesh.hpp"
 #include <stdexcept>
 #include <string>
