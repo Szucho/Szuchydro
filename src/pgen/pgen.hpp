@@ -6,6 +6,7 @@
 #include "mesh/mesh.hpp"
 #include "io/hydro_io.hpp"
 #include "solver/time_integrator.hpp"
+#include "solver/potential.hpp"
 
 /*
  Problem generators: one file per problem in src/pgen/, chosen with "gas_profile <name>".
@@ -24,6 +25,15 @@
 
 //first of all we need a problem hook to main
 struct ProblemHooks{
+  //external potential phi(x, y) (gravity or any conservative force field).
+  //If set, the solver tabulates it on the mesh and applies -rho grad(phi) / -rho v.grad(phi)
+  //"well_balanced 1" keeps this problem's hydrostatic equilibria exactly at rest,
+  //and "Hydrostatic" walls extend them
+  PotentialFn potential;
+
+  //once per step BEFORE the integrator (e.g. advancing random forcing)
+  //with a multi-stage integrator, everyting will still happen once per step
+  std::function<void(Mesh& mesh, Real dt)> begin_step;
   //smooth/well behaved source terms INSIDE the update,
   //from the same stage state as fluxes
   //(e.g. gravity, forcing, ...): add dt*S(U_stage) to U_out
@@ -57,5 +67,7 @@ void ProblemUniform(Mesh& mesh, const SimParams& par, ProblemHooks& hooks); //un
 void ProblemSodX   (Mesh& mesh, const SimParams& par, ProblemHooks& hooks); //sod.cpp
 void ProblemSedov  (Mesh& mesh, const SimParams& par, ProblemHooks& hooks); //sedov.cpp
 void ProblemDiskRz (Mesh& mesh, const SimParams& par, ProblemHooks& hooks); //disk_rz.cpp
+void ProblemTurb   (Mesh& mesh, const SimParams& par, ProblemHooks& hooks); //turb.cpp
+void ProblemAtmosphere (Mesh& mesh, const SimParams& par, ProblemHooks& hooks); //atmosphere.cpp
 
 //list extra problems below this comment

@@ -1,4 +1,5 @@
 #include "mesh/mesh.hpp"
+#include "Kokkos_Core.hpp"
 #include "hydro/slope_limiters.hpp"
 #include <stdexcept>
 #include <algorithm>
@@ -315,6 +316,8 @@ void Mesh::SyncNeighborTablesDevice(){
       }
     }
   }
+  Kokkos::deep_copy(block_dx1_view_, host_block_dx1_);
+  Kokkos::deep_copy(block_dx2_view_, host_block_dx2_);
   Kokkos::deep_copy(neighbor_gid_,   host_neighbor_gid_);
   Kokkos::deep_copy(neighbor_level_, host_neighbor_level_);
   Kokkos::deep_copy(neighbor_gid2_,  host_neighbor_gid2_);

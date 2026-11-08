@@ -48,6 +48,7 @@ void ApplyPhysicalBoundaryConditions(Mesh& mesh, const GridBC& bc) {
             case BCType::Open:
               for(size_t k = 0; k < NVAR; ++k) data(b, ghost_i, j, k) = data(b, is, j, k);
               break;
+            case BCType::Hydrostatic:
             case BCType::Closed:
               for(size_t k = 0; k < NVAR; ++k) data(b, ghost_i, j, k) = data(b, is + g, j, k);
               data(b, ghost_i, j, IM1) *= -1.0;
@@ -78,6 +79,7 @@ void ApplyPhysicalBoundaryConditions(Mesh& mesh, const GridBC& bc) {
             case BCType::Open:
               for(size_t k = 0; k < NVAR; ++k) data(b, ghost_i, j, k) = data(b, ie, j, k);
               break;
+            case BCType::Hydrostatic:
             case BCType::Closed:
               for(size_t k = 0; k < NVAR; ++k) data(b, ghost_i, j, k) = data(b, ie - g, j, k);
               data(b, ghost_i, j, IM1) *= -1.0;
@@ -108,6 +110,7 @@ void ApplyPhysicalBoundaryConditions(Mesh& mesh, const GridBC& bc) {
             case BCType::Open:
               for(size_t k = 0; k < NVAR; ++k) data(b, i, ghost_j, k) = data(b, i, js, k);
               break;
+            case BCType::Hydrostatic:
             case BCType::Closed:
               for(size_t k = 0; k < NVAR; ++k) data(b, i, ghost_j, k) = data(b, i, js + g, k);
               data(b, i, ghost_j, IM2) *= -1.0;
@@ -138,6 +141,7 @@ void ApplyPhysicalBoundaryConditions(Mesh& mesh, const GridBC& bc) {
             case BCType::Open:
               for(size_t k = 0; k < NVAR; ++k) data(b, i, ghost_j, k) = data(b, i, je, k);
               break;
+            case BCType::Hydrostatic:
             case BCType::Closed:
               for(size_t k = 0; k < NVAR; ++k) data(b, i, ghost_j, k) = data(b, i, je - g, k);
               data(b, i, ghost_j, IM2) *= -1.0;

@@ -1,0 +1,49 @@
+# Driven turbulence in a periodic box (gas_profile turb).
+# Few-mode stochastic forcing (Ornstein-Uhlenbeck in Fourier space; Schmidt et al. 2009,
+# Grete et al. 2018, after AthenaPK's few-mode driver), modes chosen at runtime from a shell.
+# Runtime: ~1 min at 128^2 to t = 3, ~15 min at 256^2 to t = 6 on one core.
+#
+#   ./build/szuchydro examples/turb_box.txt
+#   python3 scripts/animate_lic.py turb_out --tmin 1 -o turb.mp4
+
+# --- grid: periodic unit box ---
+Nx 512
+Ny 512
+nx1_block 32
+nx2_block 32
+xmin 0.0
+xmax 1.0
+ymin 0.0
+ymax 1.0
+
+# --- time ---
+Nt 1000
+t0 0.0
+tf 6.0
+cfl 0.4
+n_frames 60
+use_amr 0
+
+# --- gas: uniform, at rest (sound speed sqrt(gamma p/rho) = 1.18) ---
+gamma 1.4
+gas_profile turb
+gas_rho0 1.0
+gas_p0 1.0
+
+# --- turbulence driving ---
+turb_k_low 1           # smallest |n| of the forced wavevectors n = (i, j), k = 2 pi n / L
+turb_k_peak 2.0        # peak of the spectral shape (k/kp)^2 (2 - (k/kp)^2)
+turb_k_high 3          # largest |n|
+# turb_nmodes 0        # 0 = all modes in the shell (10 for 1..3), else a random subset
+turb_tcorr 0.5         # correlation time of the forcing
+turb_accel_rms 2.0     # rms acceleration (sets the turbulent Mach number, here ~0.9)
+turb_sol_weight 1.0    # 1 = solenoidal (vortices), 0 = compressive (sound waves, shocks)
+turb_seed 7            # same seed -> same run, with any compiler
+turb_cool_tau 0.2      # relax the temperature to its initial value (0 = off: the box heats up)
+
+bc_left Periodic
+bc_right Periodic
+bc_bottom Periodic
+bc_top Periodic
+
+outdir turb_out

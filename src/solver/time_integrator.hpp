@@ -6,6 +6,7 @@
 #include "mesh/mesh.hpp"
 #include "hydro/reconstruction.hpp"
 #include "solver/rhs.hpp"
+#include "solver/potential.hpp"
 
 /*
  Time integration: U^n -> U^{n+1} over one step dt.
@@ -30,6 +31,8 @@ class TimeIntegrator{
   private:
     std::string name_;
     FaceFluxes F_;
+    View3D phi_; //defaults to empty = no external potential field
+    bool well_balanced_ = false;
   
   public:
     //"Parameter error" for unkown name 
@@ -40,4 +43,9 @@ class TimeIntegrator{
     void step(Mesh& mesh, Real dt, Real gamma, const ReconOptions& recon, const SourceFn& smooth_sources);
 
     const std::string& name() const { return name_; }
+    
+    //external potential (tabulated by PotentialField):
+    //its source is part of L(U), evaluated from the stage like the fluxes.
+    //well balanced selects the hydrostatic reconstruction
+    void set_potential(const View3D& phi, bool well_balanced){ phi_ = phi; well_balanced_ = well_balanced; }
 };

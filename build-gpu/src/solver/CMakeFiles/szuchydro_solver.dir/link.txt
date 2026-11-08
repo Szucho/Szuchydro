@@ -1,0 +1,2 @@
+/usr/bin/ar qc libszuchydro_solver.a CMakeFiles/szuchydro_solver.dir/potential.cpp.o CMakeFiles/szuchydro_solver.dir/rhs.cpp.o CMakeFiles/szuchydro_solver.dir/time_integrator.cpp.o
+/usr/bin/ranlib libszuchydro_solver.a

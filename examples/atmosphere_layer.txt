@@ -1,0 +1,53 @@
+# Disk-like stratified layer: vertical gravity phi = 1/2 Omega^2 z^2 (harmonic), a cold midplane
+# (T = 0.1) under a hot surface layer (T = 1) on both sides, in exact discrete hydrostatic
+# equilibrium. A small pressure pulse (1e-4) in the hot layer sends a wave down into the cold gas:
+# a toy version of a heating front entering a disk.
+#
+#   ./build/szuchydro examples/atmosphere_layer.txt
+#   python3 scripts/animate_lic.py layer_out -o layer.mp4
+#
+# Well-balancing keeps the background at rest to machine precision, so even this small pulse is
+# clean. Requirements: a potential (the problem defines one), well_balanced 1, Hydrostatic walls,
+# and a UNIFORM grid (use_amr 0, no refine lines): refinement level boundaries break the balance.
+
+Nx 128
+Ny 256
+nx1_block 64
+nx2_block 64
+xmin 0.0
+xmax 2.0
+ymin -2.0
+ymax 2.0
+
+Nt 1000
+t0 0.0
+tf 4.0
+cfl 0.4
+n_frames 80
+use_amr 0                # required for exact well-balancing
+
+limiter mc
+gamma 1.4
+
+gas_profile atmosphere
+gas_rho0 1.0e-3          # density at the domain edge (z = -2)
+atm_axis y
+atm_potential harmonic
+atm_omega 1.0
+atm_T0 0.1               # midplane temperature
+atm_T1 1.0               # surface temperature
+atm_s_jump 0.8           # transition at |z| = 0.8
+atm_width 0.1
+atm_symmetric 1          # hot layer on both sides of the midplane
+atm_pert 1.0e-4          # pressure pulse in the hot layer
+atm_pert_x 1.0
+atm_pert_y 1.3
+atm_pert_sigma 0.1
+
+well_balanced 1
+bc_left Periodic
+bc_right Periodic
+bc_bottom Hydrostatic
+bc_top Hydrostatic
+
+outdir layer_out

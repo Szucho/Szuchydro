@@ -1,4 +1,5 @@
 #include "solver/time_integrator.hpp"
+#include "solver/potential.hpp"
 #include <stdexcept>
 
 //throw "Parameter error" if unknown integrator name
@@ -18,8 +19,9 @@ void TimeIntegrator::step(Mesh& mesh, Real dt, Real gamma, const ReconOptions& r
 
   //forward Euler: one stage
   //TODO: VL2 SOON
-  ComputeFluxes(mesh, U, gamma, recon, F_);
+  ComputeFluxes(mesh, U, gamma, recon, F_, phi_, well_balanced_);
   ApplyFluxDivergence(mesh, U, Unew, F_, dt);
+  if(phi_.extent(0) > 0) AddPotentialSource(mesh, phi_, U, Unew, dt); //add the external potential
   if(smooth_sources) smooth_sources(mesh, U, Unew, dt); //easy addition of well behaved source terms
 
   mesh.swap_data_views(); //swap

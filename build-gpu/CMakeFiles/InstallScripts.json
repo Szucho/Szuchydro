@@ -1,0 +1,26 @@
+{
+	"InstallScripts" : 
+	[
+		"/home/szuch/Szuchydro/build-gpu/cmake_install.cmake",
+		"/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/cmake_install.cmake",
+		"/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/core/cmake_install.cmake",
+		"/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/core/src/cmake_install.cmake",
+		"/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/containers/cmake_install.cmake",
+		"/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/containers/src/cmake_install.cmake",
+		"/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/algorithms/cmake_install.cmake",
+		"/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/algorithms/src/cmake_install.cmake",
+		"/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/simd/cmake_install.cmake",
+		"/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/simd/src/cmake_install.cmake",
+		"/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/example/cmake_install.cmake",
+		"/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/benchmarks/cmake_install.cmake",
+		"/home/szuch/Szuchydro/build-gpu/src/core/cmake_install.cmake",
+		"/home/szuch/Szuchydro/build-gpu/src/hydro/cmake_install.cmake",
+		"/home/szuch/Szuchydro/build-gpu/src/mesh/cmake_install.cmake",
+		"/home/szuch/Szuchydro/build-gpu/src/solver/cmake_install.cmake",
+		"/home/szuch/Szuchydro/build-gpu/src/bvals/cmake_install.cmake",
+		"/home/szuch/Szuchydro/build-gpu/src/physics/cmake_install.cmake",
+		"/home/szuch/Szuchydro/build-gpu/src/io/cmake_install.cmake",
+		"/home/szuch/Szuchydro/build-gpu/src/pgen/cmake_install.cmake"
+	],
+	"Parallel" : false
+}

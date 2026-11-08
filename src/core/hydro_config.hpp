@@ -48,7 +48,7 @@ struct Vec4 {
 
 
 //supported boundary condition types
-enum class BCType{Open, Closed, Periodic, Dirichlet, Outflow};
+enum class BCType{Open, Closed, Periodic, Dirichlet, Outflow, Hydrostatic};
 
 //configuration container for an individual boundary wall
 struct BoundaryCondition{

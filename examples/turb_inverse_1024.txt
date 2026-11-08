@@ -1,0 +1,53 @@
+# 2D INVERSE ENERGY CASCADE (expected E ~ k^-5/3 for k < k_f), 1024^2, meant for a GPU build.
+# Forcing at SMALL scales (k_f ~ 64, i.e. 16 cells per wavelength), drag removes the energy that
+# arrives at the largest scales. A STARTING POINT: calibrated at 128^2 only (k_f = 12 there, where
+# the inverse range was too short to show a power law).
+#
+#   ./build/szuchydro examples/turb_inverse_1024.txt
+#   python3 scripts/spectrum.py turb_inv_out --tmin 30 --fit 3 40 --component sol -o inv.png
+#
+# Check: kinetic energy steady; energy share at k < k_f growing then saturating; the spectrum
+# should peak near the drag scale, not at k = 1 (else raise turb_drag) and not near k_f
+# (else lower turb_drag or run longer).
+
+Nx 1024
+Ny 1024
+nx1_block 128
+nx2_block 128
+xmin 0.0
+xmax 1.0
+ymin 0.0
+ymax 1.0
+
+Nt 1000
+t0 0.0
+tf 60.0
+cfl 0.4
+n_frames 40
+use_amr 0
+
+limiter mc
+reconstruct primitive
+
+gamma 1.4
+gas_profile turb
+gas_rho0 1.0
+gas_p0 1.0
+
+turb_k_low 62          # narrow shell around k_f = 64
+turb_k_peak 64.0
+turb_k_high 66
+turb_nmodes 64         # random subset of the ~400 modes in the shell (cost ~ number of modes)
+turb_tcorr 0.05        # short: small eddies turn over fast
+turb_accel_rms 1.5     # Mach ~0.2 at 128^2 with k_f = 12; adjust after a short run
+turb_sol_weight 1.0
+turb_drag 0.05         # weaker than at 128^2 (0.3 there removed the energy too early)
+turb_cool_tau 0.2
+turb_seed 3
+
+bc_left Periodic
+bc_right Periodic
+bc_bottom Periodic
+bc_top Periodic
+
+outdir turb_inv_out

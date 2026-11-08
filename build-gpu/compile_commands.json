@@ -1,0 +1,242 @@
+[
+{
+  "directory": "/home/szuch/Szuchydro/build-gpu",
+  "command": "/home/szuch/Szuchydro/build/_deps/kokkos-src/bin/nvcc_wrapper -DKOKKOS_DEPENDENCE -I/home/szuch/Szuchydro/src/core/.. -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/core/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/core/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/containers/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/containers/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/algorithms/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/algorithms/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/simd/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/simd/src -isystem /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/desul/include -isystem /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/mdspan/include -O3 -DNDEBUG -std=c++20 -extended-lambda -Wext-lambda-captures-this -arch=sm_86 -o CMakeFiles/szuchydro.dir/src/main.cpp.o -c /home/szuch/Szuchydro/src/main.cpp",
+  "file": "/home/szuch/Szuchydro/src/main.cpp",
+  "output": "CMakeFiles/szuchydro.dir/src/main.cpp.o"
+},
+{
+  "directory": "/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build",
+  "command": "/home/szuch/Szuchydro/build/_deps/kokkos-src/bin/nvcc_wrapper  -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/generated -O3 -DNDEBUG -std=c++20 -o CMakeFiles/impl_git_version.dir/generated/Kokkos_Version_Info.cpp.o -c /home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/generated/Kokkos_Version_Info.cpp",
+  "file": "/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/generated/Kokkos_Version_Info.cpp",
+  "output": "_deps/kokkos-build/CMakeFiles/impl_git_version.dir/generated/Kokkos_Version_Info.cpp.o"
+},
+{
+  "directory": "/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/core/src",
+  "command": "/home/szuch/Szuchydro/build/_deps/kokkos-src/bin/nvcc_wrapper -DKOKKOS_DEPENDENCE -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/core/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/core/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build -isystem /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/desul/include -isystem /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/mdspan/include -x c++ -O3 -DNDEBUG -std=c++20 -extended-lambda -Wext-lambda-captures-this -arch=sm_86 -o CMakeFiles/kokkoscore.dir/impl/Kokkos_Abort.cpp.o -c /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/core/src/impl/Kokkos_Abort.cpp",
+  "file": "/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/core/src/impl/Kokkos_Abort.cpp",
+  "output": "_deps/kokkos-build/core/src/CMakeFiles/kokkoscore.dir/impl/Kokkos_Abort.cpp.o"
+},
+{
+  "directory": "/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/core/src",
+  "command": "/home/szuch/Szuchydro/build/_deps/kokkos-src/bin/nvcc_wrapper -DKOKKOS_DEPENDENCE -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/core/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/core/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build -isystem /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/desul/include -isystem /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/mdspan/include -x c++ -O3 -DNDEBUG -std=c++20 -extended-lambda -Wext-lambda-captures-this -arch=sm_86 -o CMakeFiles/kokkoscore.dir/impl/Kokkos_CPUDiscovery.cpp.o -c /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/core/src/impl/Kokkos_CPUDiscovery.cpp",
+  "file": "/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/core/src/impl/Kokkos_CPUDiscovery.cpp",
+  "output": "_deps/kokkos-build/core/src/CMakeFiles/kokkoscore.dir/impl/Kokkos_CPUDiscovery.cpp.o"
+},
+{
+  "directory": "/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/core/src",
+  "command": "/home/szuch/Szuchydro/build/_deps/kokkos-src/bin/nvcc_wrapper -DKOKKOS_DEPENDENCE -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/core/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/core/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build -isystem /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/desul/include -isystem /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/mdspan/include -x c++ -O3 -DNDEBUG -std=c++20 -extended-lambda -Wext-lambda-captures-this -arch=sm_86 -o CMakeFiles/kokkoscore.dir/impl/Kokkos_Command_Line_Parsing.cpp.o -c /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/core/src/impl/Kokkos_Command_Line_Parsing.cpp",
+  "file": "/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/core/src/impl/Kokkos_Command_Line_Parsing.cpp",
+  "output": "_deps/kokkos-build/core/src/CMakeFiles/kokkoscore.dir/impl/Kokkos_Command_Line_Parsing.cpp.o"
+},
+{
+  "directory": "/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/core/src",
+  "command": "/home/szuch/Szuchydro/build/_deps/kokkos-src/bin/nvcc_wrapper -DKOKKOS_DEPENDENCE -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/core/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/core/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build -isystem /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/desul/include -isystem /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/mdspan/include -x c++ -O3 -DNDEBUG -std=c++20 -extended-lambda -Wext-lambda-captures-this -arch=sm_86 -o CMakeFiles/kokkoscore.dir/impl/Kokkos_Core.cpp.o -c /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/core/src/impl/Kokkos_Core.cpp",
+  "file": "/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/core/src/impl/Kokkos_Core.cpp",
+  "output": "_deps/kokkos-build/core/src/CMakeFiles/kokkoscore.dir/impl/Kokkos_Core.cpp.o"
+},
+{
+  "directory": "/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/core/src",
+  "command": "/home/szuch/Szuchydro/build/_deps/kokkos-src/bin/nvcc_wrapper -DKOKKOS_DEPENDENCE -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/core/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/core/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build -isystem /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/desul/include -isystem /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/mdspan/include -x c++ -O3 -DNDEBUG -std=c++20 -extended-lambda -Wext-lambda-captures-this -arch=sm_86 -o CMakeFiles/kokkoscore.dir/impl/Kokkos_Error.cpp.o -c /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/core/src/impl/Kokkos_Error.cpp",
+  "file": "/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/core/src/impl/Kokkos_Error.cpp",
+  "output": "_deps/kokkos-build/core/src/CMakeFiles/kokkoscore.dir/impl/Kokkos_Error.cpp.o"
+},
+{
+  "directory": "/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/core/src",
+  "command": "/home/szuch/Szuchydro/build/_deps/kokkos-src/bin/nvcc_wrapper -DKOKKOS_DEPENDENCE -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/core/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/core/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build -isystem /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/desul/include -isystem /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/mdspan/include -x c++ -O3 -DNDEBUG -std=c++20 -extended-lambda -Wext-lambda-captures-this -arch=sm_86 -o CMakeFiles/kokkoscore.dir/impl/Kokkos_ExecPolicy.cpp.o -c /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/core/src/impl/Kokkos_ExecPolicy.cpp",
+  "file": "/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/core/src/impl/Kokkos_ExecPolicy.cpp",
+  "output": "_deps/kokkos-build/core/src/CMakeFiles/kokkoscore.dir/impl/Kokkos_ExecPolicy.cpp.o"
+},
+{
+  "directory": "/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/core/src",
+  "command": "/home/szuch/Szuchydro/build/_deps/kokkos-src/bin/nvcc_wrapper -DKOKKOS_DEPENDENCE -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/core/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/core/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build -isystem /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/desul/include -isystem /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/mdspan/include -x c++ -O3 -DNDEBUG -std=c++20 -extended-lambda -Wext-lambda-captures-this -arch=sm_86 -o CMakeFiles/kokkoscore.dir/impl/Kokkos_HostBarrier.cpp.o -c /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/core/src/impl/Kokkos_HostBarrier.cpp",
+  "file": "/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/core/src/impl/Kokkos_HostBarrier.cpp",
+  "output": "_deps/kokkos-build/core/src/CMakeFiles/kokkoscore.dir/impl/Kokkos_HostBarrier.cpp.o"
+},
+{
+  "directory": "/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/core/src",
+  "command": "/home/szuch/Szuchydro/build/_deps/kokkos-src/bin/nvcc_wrapper -DKOKKOS_DEPENDENCE -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/core/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/core/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build -isystem /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/desul/include -isystem /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/mdspan/include -x c++ -O3 -DNDEBUG -std=c++20 -extended-lambda -Wext-lambda-captures-this -arch=sm_86 -o CMakeFiles/kokkoscore.dir/impl/Kokkos_HostSpace.cpp.o -c /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/core/src/impl/Kokkos_HostSpace.cpp",
+  "file": "/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/core/src/impl/Kokkos_HostSpace.cpp",
+  "output": "_deps/kokkos-build/core/src/CMakeFiles/kokkoscore.dir/impl/Kokkos_HostSpace.cpp.o"
+},
+{
+  "directory": "/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/core/src",
+  "command": "/home/szuch/Szuchydro/build/_deps/kokkos-src/bin/nvcc_wrapper -DKOKKOS_DEPENDENCE -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/core/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/core/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build -isystem /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/desul/include -isystem /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/mdspan/include -x c++ -O3 -DNDEBUG -std=c++20 -extended-lambda -Wext-lambda-captures-this -arch=sm_86 -o CMakeFiles/kokkoscore.dir/impl/Kokkos_HostSpace_deepcopy.cpp.o -c /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/core/src/impl/Kokkos_HostSpace_deepcopy.cpp",
+  "file": "/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/core/src/impl/Kokkos_HostSpace_deepcopy.cpp",
+  "output": "_deps/kokkos-build/core/src/CMakeFiles/kokkoscore.dir/impl/Kokkos_HostSpace_deepcopy.cpp.o"
+},
+{
+  "directory": "/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/core/src",
+  "command": "/home/szuch/Szuchydro/build/_deps/kokkos-src/bin/nvcc_wrapper -DKOKKOS_DEPENDENCE -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/core/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/core/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build -isystem /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/desul/include -isystem /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/mdspan/include -x c++ -O3 -DNDEBUG -std=c++20 -extended-lambda -Wext-lambda-captures-this -arch=sm_86 -o CMakeFiles/kokkoscore.dir/impl/Kokkos_HostThreadTeam.cpp.o -c /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/core/src/impl/Kokkos_HostThreadTeam.cpp",
+  "file": "/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/core/src/impl/Kokkos_HostThreadTeam.cpp",
+  "output": "_deps/kokkos-build/core/src/CMakeFiles/kokkoscore.dir/impl/Kokkos_HostThreadTeam.cpp.o"
+},
+{
+  "directory": "/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/core/src",
+  "command": "/home/szuch/Szuchydro/build/_deps/kokkos-src/bin/nvcc_wrapper -DKOKKOS_DEPENDENCE -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/core/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/core/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build -isystem /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/desul/include -isystem /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/mdspan/include -x c++ -O3 -DNDEBUG -std=c++20 -extended-lambda -Wext-lambda-captures-this -arch=sm_86 -o CMakeFiles/kokkoscore.dir/impl/Kokkos_MemoryPool.cpp.o -c /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/core/src/impl/Kokkos_MemoryPool.cpp",
+  "file": "/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/core/src/impl/Kokkos_MemoryPool.cpp",
+  "output": "_deps/kokkos-build/core/src/CMakeFiles/kokkoscore.dir/impl/Kokkos_MemoryPool.cpp.o"
+},
+{
+  "directory": "/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/core/src",
+  "command": "/home/szuch/Szuchydro/build/_deps/kokkos-src/bin/nvcc_wrapper -DKOKKOS_DEPENDENCE -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/core/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/core/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build -isystem /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/desul/include -isystem /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/mdspan/include -x c++ -O3 -DNDEBUG -std=c++20 -extended-lambda -Wext-lambda-captures-this -arch=sm_86 -o CMakeFiles/kokkoscore.dir/impl/Kokkos_Profiling.cpp.o -c /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/core/src/impl/Kokkos_Profiling.cpp",
+  "file": "/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/core/src/impl/Kokkos_Profiling.cpp",
+  "output": "_deps/kokkos-build/core/src/CMakeFiles/kokkoscore.dir/impl/Kokkos_Profiling.cpp.o"
+},
+{
+  "directory": "/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/core/src",
+  "command": "/home/szuch/Szuchydro/build/_deps/kokkos-src/bin/nvcc_wrapper -DKOKKOS_DEPENDENCE -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/core/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/core/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build -isystem /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/desul/include -isystem /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/mdspan/include -x c++ -O3 -DNDEBUG -std=c++20 -extended-lambda -Wext-lambda-captures-this -arch=sm_86 -o CMakeFiles/kokkoscore.dir/impl/Kokkos_SharedAlloc.cpp.o -c /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/core/src/impl/Kokkos_SharedAlloc.cpp",
+  "file": "/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/core/src/impl/Kokkos_SharedAlloc.cpp",
+  "output": "_deps/kokkos-build/core/src/CMakeFiles/kokkoscore.dir/impl/Kokkos_SharedAlloc.cpp.o"
+},
+{
+  "directory": "/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/core/src",
+  "command": "/home/szuch/Szuchydro/build/_deps/kokkos-src/bin/nvcc_wrapper -DKOKKOS_DEPENDENCE -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/core/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/core/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build -isystem /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/desul/include -isystem /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/mdspan/include -x c++ -O3 -DNDEBUG -std=c++20 -extended-lambda -Wext-lambda-captures-this -arch=sm_86 -o CMakeFiles/kokkoscore.dir/impl/Kokkos_Stacktrace.cpp.o -c /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/core/src/impl/Kokkos_Stacktrace.cpp",
+  "file": "/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/core/src/impl/Kokkos_Stacktrace.cpp",
+  "output": "_deps/kokkos-build/core/src/CMakeFiles/kokkoscore.dir/impl/Kokkos_Stacktrace.cpp.o"
+},
+{
+  "directory": "/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/core/src",
+  "command": "/home/szuch/Szuchydro/build/_deps/kokkos-src/bin/nvcc_wrapper -DKOKKOS_DEPENDENCE -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/core/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/core/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build -isystem /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/desul/include -isystem /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/mdspan/include -x c++ -O3 -DNDEBUG -std=c++20 -extended-lambda -Wext-lambda-captures-this -arch=sm_86 -o CMakeFiles/kokkoscore.dir/impl/Kokkos_hwloc.cpp.o -c /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/core/src/impl/Kokkos_hwloc.cpp",
+  "file": "/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/core/src/impl/Kokkos_hwloc.cpp",
+  "output": "_deps/kokkos-build/core/src/CMakeFiles/kokkoscore.dir/impl/Kokkos_hwloc.cpp.o"
+},
+{
+  "directory": "/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/core/src",
+  "command": "/home/szuch/Szuchydro/build/_deps/kokkos-src/bin/nvcc_wrapper -DKOKKOS_DEPENDENCE -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/core/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/core/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build -isystem /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/desul/include -isystem /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/mdspan/include -x c++ -O3 -DNDEBUG -std=c++20 -extended-lambda -Wext-lambda-captures-this -arch=sm_86 -o CMakeFiles/kokkoscore.dir/Cuda/Kokkos_CudaSpace.cpp.o -c /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/core/src/Cuda/Kokkos_CudaSpace.cpp",
+  "file": "/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/core/src/Cuda/Kokkos_CudaSpace.cpp",
+  "output": "_deps/kokkos-build/core/src/CMakeFiles/kokkoscore.dir/Cuda/Kokkos_CudaSpace.cpp.o"
+},
+{
+  "directory": "/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/core/src",
+  "command": "/home/szuch/Szuchydro/build/_deps/kokkos-src/bin/nvcc_wrapper -DKOKKOS_DEPENDENCE -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/core/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/core/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build -isystem /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/desul/include -isystem /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/mdspan/include -x c++ -O3 -DNDEBUG -std=c++20 -extended-lambda -Wext-lambda-captures-this -arch=sm_86 -o CMakeFiles/kokkoscore.dir/Cuda/Kokkos_Cuda_Instance.cpp.o -c /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/core/src/Cuda/Kokkos_Cuda_Instance.cpp",
+  "file": "/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/core/src/Cuda/Kokkos_Cuda_Instance.cpp",
+  "output": "_deps/kokkos-build/core/src/CMakeFiles/kokkoscore.dir/Cuda/Kokkos_Cuda_Instance.cpp.o"
+},
+{
+  "directory": "/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/core/src",
+  "command": "/home/szuch/Szuchydro/build/_deps/kokkos-src/bin/nvcc_wrapper -DKOKKOS_DEPENDENCE -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/core/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/core/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build -isystem /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/desul/include -isystem /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/mdspan/include -x c++ -O3 -DNDEBUG -std=c++20 -extended-lambda -Wext-lambda-captures-this -arch=sm_86 -o CMakeFiles/kokkoscore.dir/Serial/Kokkos_Serial.cpp.o -c /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/core/src/Serial/Kokkos_Serial.cpp",
+  "file": "/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/core/src/Serial/Kokkos_Serial.cpp",
+  "output": "_deps/kokkos-build/core/src/CMakeFiles/kokkoscore.dir/Serial/Kokkos_Serial.cpp.o"
+},
+{
+  "directory": "/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/core/src",
+  "command": "/home/szuch/Szuchydro/build/_deps/kokkos-src/bin/nvcc_wrapper -DKOKKOS_DEPENDENCE -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/core/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/core/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build -isystem /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/desul/include -isystem /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/mdspan/include -x c++ -O3 -DNDEBUG -std=c++20 -extended-lambda -Wext-lambda-captures-this -arch=sm_86 -o CMakeFiles/kokkoscore.dir/__/__/tpls/desul/src/Lock_Array_CUDA.cpp.o -c /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/desul/src/Lock_Array_CUDA.cpp",
+  "file": "/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/desul/src/Lock_Array_CUDA.cpp",
+  "output": "_deps/kokkos-build/core/src/CMakeFiles/kokkoscore.dir/__/__/tpls/desul/src/Lock_Array_CUDA.cpp.o"
+},
+{
+  "directory": "/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/containers/src",
+  "command": "/home/szuch/Szuchydro/build/_deps/kokkos-src/bin/nvcc_wrapper -DKOKKOS_DEPENDENCE -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/containers/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/containers/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/core/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/core/src -isystem /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/desul/include -isystem /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/mdspan/include -x c++ -O3 -DNDEBUG -std=c++20 -extended-lambda -Wext-lambda-captures-this -arch=sm_86 -o CMakeFiles/kokkoscontainers.dir/impl/Kokkos_UnorderedMap_impl.cpp.o -c /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/containers/src/impl/Kokkos_UnorderedMap_impl.cpp",
+  "file": "/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/containers/src/impl/Kokkos_UnorderedMap_impl.cpp",
+  "output": "_deps/kokkos-build/containers/src/CMakeFiles/kokkoscontainers.dir/impl/Kokkos_UnorderedMap_impl.cpp.o"
+},
+{
+  "directory": "/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/algorithms/src",
+  "command": "/home/szuch/Szuchydro/build/_deps/kokkos-src/bin/nvcc_wrapper -DKOKKOS_DEPENDENCE -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/algorithms/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/algorithms/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/core/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/core/src -isystem /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/desul/include -isystem /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/mdspan/include -x c++ -O3 -DNDEBUG -std=c++20 -extended-lambda -Wext-lambda-captures-this -arch=sm_86 -o CMakeFiles/kokkosalgorithms.dir/KokkosAlgorithms_dummy.cpp.o -c /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/algorithms/src/KokkosAlgorithms_dummy.cpp",
+  "file": "/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/algorithms/src/KokkosAlgorithms_dummy.cpp",
+  "output": "_deps/kokkos-build/algorithms/src/CMakeFiles/kokkosalgorithms.dir/KokkosAlgorithms_dummy.cpp.o"
+},
+{
+  "directory": "/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/simd/src",
+  "command": "/home/szuch/Szuchydro/build/_deps/kokkos-src/bin/nvcc_wrapper -DKOKKOS_DEPENDENCE -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/simd/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/simd/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/core/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/core/src -isystem /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/desul/include -isystem /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/mdspan/include -x c++ -O3 -DNDEBUG -std=c++20 -extended-lambda -Wext-lambda-captures-this -arch=sm_86 -o CMakeFiles/kokkossimd.dir/Kokkos_SIMD_dummy.cpp.o -c /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/simd/src/Kokkos_SIMD_dummy.cpp",
+  "file": "/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/simd/src/Kokkos_SIMD_dummy.cpp",
+  "output": "_deps/kokkos-build/simd/src/CMakeFiles/kokkossimd.dir/Kokkos_SIMD_dummy.cpp.o"
+},
+{
+  "directory": "/home/szuch/Szuchydro/build-gpu/src/mesh",
+  "command": "/home/szuch/Szuchydro/build/_deps/kokkos-src/bin/nvcc_wrapper -DKOKKOS_DEPENDENCE -I/home/szuch/Szuchydro/src/core/.. -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/core/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/core/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/containers/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/containers/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/algorithms/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/algorithms/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/simd/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/simd/src -isystem /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/desul/include -isystem /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/mdspan/include -O3 -DNDEBUG -std=c++20 -extended-lambda -Wext-lambda-captures-this -arch=sm_86 -o CMakeFiles/szuchydro_mesh.dir/mesh.cpp.o -c /home/szuch/Szuchydro/src/mesh/mesh.cpp",
+  "file": "/home/szuch/Szuchydro/src/mesh/mesh.cpp",
+  "output": "src/mesh/CMakeFiles/szuchydro_mesh.dir/mesh.cpp.o"
+},
+{
+  "directory": "/home/szuch/Szuchydro/build-gpu/src/mesh",
+  "command": "/home/szuch/Szuchydro/build/_deps/kokkos-src/bin/nvcc_wrapper -DKOKKOS_DEPENDENCE -I/home/szuch/Szuchydro/src/core/.. -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/core/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/core/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/containers/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/containers/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/algorithms/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/algorithms/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/simd/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/simd/src -isystem /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/desul/include -isystem /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/mdspan/include -O3 -DNDEBUG -std=c++20 -extended-lambda -Wext-lambda-captures-this -arch=sm_86 -o CMakeFiles/szuchydro_mesh.dir/meshtree.cpp.o -c /home/szuch/Szuchydro/src/mesh/meshtree.cpp",
+  "file": "/home/szuch/Szuchydro/src/mesh/meshtree.cpp",
+  "output": "src/mesh/CMakeFiles/szuchydro_mesh.dir/meshtree.cpp.o"
+},
+{
+  "directory": "/home/szuch/Szuchydro/build-gpu/src/solver",
+  "command": "/home/szuch/Szuchydro/build/_deps/kokkos-src/bin/nvcc_wrapper -DKOKKOS_DEPENDENCE -I/home/szuch/Szuchydro/src/core/.. -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/core/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/core/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/containers/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/containers/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/algorithms/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/algorithms/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/simd/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/simd/src -isystem /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/desul/include -isystem /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/mdspan/include -O3 -DNDEBUG -std=c++20 -extended-lambda -Wext-lambda-captures-this -arch=sm_86 -o CMakeFiles/szuchydro_solver.dir/potential.cpp.o -c /home/szuch/Szuchydro/src/solver/potential.cpp",
+  "file": "/home/szuch/Szuchydro/src/solver/potential.cpp",
+  "output": "src/solver/CMakeFiles/szuchydro_solver.dir/potential.cpp.o"
+},
+{
+  "directory": "/home/szuch/Szuchydro/build-gpu/src/solver",
+  "command": "/home/szuch/Szuchydro/build/_deps/kokkos-src/bin/nvcc_wrapper -DKOKKOS_DEPENDENCE -I/home/szuch/Szuchydro/src/core/.. -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/core/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/core/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/containers/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/containers/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/algorithms/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/algorithms/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/simd/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/simd/src -isystem /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/desul/include -isystem /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/mdspan/include -O3 -DNDEBUG -std=c++20 -extended-lambda -Wext-lambda-captures-this -arch=sm_86 -o CMakeFiles/szuchydro_solver.dir/rhs.cpp.o -c /home/szuch/Szuchydro/src/solver/rhs.cpp",
+  "file": "/home/szuch/Szuchydro/src/solver/rhs.cpp",
+  "output": "src/solver/CMakeFiles/szuchydro_solver.dir/rhs.cpp.o"
+},
+{
+  "directory": "/home/szuch/Szuchydro/build-gpu/src/solver",
+  "command": "/home/szuch/Szuchydro/build/_deps/kokkos-src/bin/nvcc_wrapper -DKOKKOS_DEPENDENCE -I/home/szuch/Szuchydro/src/core/.. -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/core/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/core/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/containers/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/containers/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/algorithms/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/algorithms/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/simd/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/simd/src -isystem /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/desul/include -isystem /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/mdspan/include -O3 -DNDEBUG -std=c++20 -extended-lambda -Wext-lambda-captures-this -arch=sm_86 -o CMakeFiles/szuchydro_solver.dir/time_integrator.cpp.o -c /home/szuch/Szuchydro/src/solver/time_integrator.cpp",
+  "file": "/home/szuch/Szuchydro/src/solver/time_integrator.cpp",
+  "output": "src/solver/CMakeFiles/szuchydro_solver.dir/time_integrator.cpp.o"
+},
+{
+  "directory": "/home/szuch/Szuchydro/build-gpu/src/bvals",
+  "command": "/home/szuch/Szuchydro/build/_deps/kokkos-src/bin/nvcc_wrapper -DKOKKOS_DEPENDENCE -I/home/szuch/Szuchydro/src/core/.. -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/core/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/core/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/containers/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/containers/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/algorithms/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/algorithms/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/simd/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/simd/src -isystem /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/desul/include -isystem /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/mdspan/include -O3 -DNDEBUG -std=c++20 -extended-lambda -Wext-lambda-captures-this -arch=sm_86 -o CMakeFiles/szuchydro_bvals.dir/bvals.cpp.o -c /home/szuch/Szuchydro/src/bvals/bvals.cpp",
+  "file": "/home/szuch/Szuchydro/src/bvals/bvals.cpp",
+  "output": "src/bvals/CMakeFiles/szuchydro_bvals.dir/bvals.cpp.o"
+},
+{
+  "directory": "/home/szuch/Szuchydro/build-gpu/src/physics",
+  "command": "/home/szuch/Szuchydro/build/_deps/kokkos-src/bin/nvcc_wrapper -DKOKKOS_DEPENDENCE -I/home/szuch/Szuchydro/src/core/.. -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/core/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/core/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/containers/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/containers/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/algorithms/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/algorithms/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/simd/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/simd/src -isystem /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/desul/include -isystem /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/mdspan/include -O3 -DNDEBUG -std=c++20 -extended-lambda -Wext-lambda-captures-this -arch=sm_86 -o CMakeFiles/szuchydro_physics.dir/disk_physics.cpp.o -c /home/szuch/Szuchydro/src/physics/disk_physics.cpp",
+  "file": "/home/szuch/Szuchydro/src/physics/disk_physics.cpp",
+  "output": "src/physics/CMakeFiles/szuchydro_physics.dir/disk_physics.cpp.o"
+},
+{
+  "directory": "/home/szuch/Szuchydro/build-gpu/src/physics",
+  "command": "/home/szuch/Szuchydro/build/_deps/kokkos-src/bin/nvcc_wrapper -DKOKKOS_DEPENDENCE -I/home/szuch/Szuchydro/src/core/.. -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/core/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/core/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/containers/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/containers/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/algorithms/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/algorithms/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/simd/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/simd/src -isystem /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/desul/include -isystem /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/mdspan/include -O3 -DNDEBUG -std=c++20 -extended-lambda -Wext-lambda-captures-this -arch=sm_86 -o CMakeFiles/szuchydro_physics.dir/turbulence.cpp.o -c /home/szuch/Szuchydro/src/physics/turbulence.cpp",
+  "file": "/home/szuch/Szuchydro/src/physics/turbulence.cpp",
+  "output": "src/physics/CMakeFiles/szuchydro_physics.dir/turbulence.cpp.o"
+},
+{
+  "directory": "/home/szuch/Szuchydro/build-gpu/src/io",
+  "command": "/home/szuch/Szuchydro/build/_deps/kokkos-src/bin/nvcc_wrapper -DKOKKOS_DEPENDENCE -I/home/szuch/Szuchydro/src/core/.. -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/core/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/core/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/containers/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/containers/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/algorithms/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/algorithms/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/simd/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/simd/src -isystem /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/desul/include -isystem /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/mdspan/include -O3 -DNDEBUG -std=c++20 -extended-lambda -Wext-lambda-captures-this -arch=sm_86 -o CMakeFiles/szuchydro_io.dir/hydro_io.cpp.o -c /home/szuch/Szuchydro/src/io/hydro_io.cpp",
+  "file": "/home/szuch/Szuchydro/src/io/hydro_io.cpp",
+  "output": "src/io/CMakeFiles/szuchydro_io.dir/hydro_io.cpp.o"
+},
+{
+  "directory": "/home/szuch/Szuchydro/build-gpu/src/pgen",
+  "command": "/home/szuch/Szuchydro/build/_deps/kokkos-src/bin/nvcc_wrapper -DKOKKOS_DEPENDENCE -I/home/szuch/Szuchydro/src/core/.. -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/core/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/core/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/containers/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/containers/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/algorithms/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/algorithms/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/simd/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/simd/src -isystem /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/desul/include -isystem /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/mdspan/include -O3 -DNDEBUG -std=c++20 -extended-lambda -Wext-lambda-captures-this -arch=sm_86 -o CMakeFiles/szuchydro_pgen.dir/atmosphere.cpp.o -c /home/szuch/Szuchydro/src/pgen/atmosphere.cpp",
+  "file": "/home/szuch/Szuchydro/src/pgen/atmosphere.cpp",
+  "output": "src/pgen/CMakeFiles/szuchydro_pgen.dir/atmosphere.cpp.o"
+},
+{
+  "directory": "/home/szuch/Szuchydro/build-gpu/src/pgen",
+  "command": "/home/szuch/Szuchydro/build/_deps/kokkos-src/bin/nvcc_wrapper -DKOKKOS_DEPENDENCE -I/home/szuch/Szuchydro/src/core/.. -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/core/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/core/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/containers/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/containers/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/algorithms/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/algorithms/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/simd/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/simd/src -isystem /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/desul/include -isystem /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/mdspan/include -O3 -DNDEBUG -std=c++20 -extended-lambda -Wext-lambda-captures-this -arch=sm_86 -o CMakeFiles/szuchydro_pgen.dir/disk_rz.cpp.o -c /home/szuch/Szuchydro/src/pgen/disk_rz.cpp",
+  "file": "/home/szuch/Szuchydro/src/pgen/disk_rz.cpp",
+  "output": "src/pgen/CMakeFiles/szuchydro_pgen.dir/disk_rz.cpp.o"
+},
+{
+  "directory": "/home/szuch/Szuchydro/build-gpu/src/pgen",
+  "command": "/home/szuch/Szuchydro/build/_deps/kokkos-src/bin/nvcc_wrapper -DKOKKOS_DEPENDENCE -I/home/szuch/Szuchydro/src/core/.. -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/core/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/core/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/containers/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/containers/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/algorithms/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/algorithms/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/simd/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/simd/src -isystem /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/desul/include -isystem /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/mdspan/include -O3 -DNDEBUG -std=c++20 -extended-lambda -Wext-lambda-captures-this -arch=sm_86 -o CMakeFiles/szuchydro_pgen.dir/pgen.cpp.o -c /home/szuch/Szuchydro/src/pgen/pgen.cpp",
+  "file": "/home/szuch/Szuchydro/src/pgen/pgen.cpp",
+  "output": "src/pgen/CMakeFiles/szuchydro_pgen.dir/pgen.cpp.o"
+},
+{
+  "directory": "/home/szuch/Szuchydro/build-gpu/src/pgen",
+  "command": "/home/szuch/Szuchydro/build/_deps/kokkos-src/bin/nvcc_wrapper -DKOKKOS_DEPENDENCE -I/home/szuch/Szuchydro/src/core/.. -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/core/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/core/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/containers/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/containers/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/algorithms/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/algorithms/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/simd/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/simd/src -isystem /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/desul/include -isystem /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/mdspan/include -O3 -DNDEBUG -std=c++20 -extended-lambda -Wext-lambda-captures-this -arch=sm_86 -o CMakeFiles/szuchydro_pgen.dir/sedov.cpp.o -c /home/szuch/Szuchydro/src/pgen/sedov.cpp",
+  "file": "/home/szuch/Szuchydro/src/pgen/sedov.cpp",
+  "output": "src/pgen/CMakeFiles/szuchydro_pgen.dir/sedov.cpp.o"
+},
+{
+  "directory": "/home/szuch/Szuchydro/build-gpu/src/pgen",
+  "command": "/home/szuch/Szuchydro/build/_deps/kokkos-src/bin/nvcc_wrapper -DKOKKOS_DEPENDENCE -I/home/szuch/Szuchydro/src/core/.. -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/core/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/core/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/containers/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/containers/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/algorithms/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/algorithms/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/simd/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/simd/src -isystem /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/desul/include -isystem /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/mdspan/include -O3 -DNDEBUG -std=c++20 -extended-lambda -Wext-lambda-captures-this -arch=sm_86 -o CMakeFiles/szuchydro_pgen.dir/sod.cpp.o -c /home/szuch/Szuchydro/src/pgen/sod.cpp",
+  "file": "/home/szuch/Szuchydro/src/pgen/sod.cpp",
+  "output": "src/pgen/CMakeFiles/szuchydro_pgen.dir/sod.cpp.o"
+},
+{
+  "directory": "/home/szuch/Szuchydro/build-gpu/src/pgen",
+  "command": "/home/szuch/Szuchydro/build/_deps/kokkos-src/bin/nvcc_wrapper -DKOKKOS_DEPENDENCE -I/home/szuch/Szuchydro/src/core/.. -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/core/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/core/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/containers/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/containers/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/algorithms/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/algorithms/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/simd/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/simd/src -isystem /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/desul/include -isystem /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/mdspan/include -O3 -DNDEBUG -std=c++20 -extended-lambda -Wext-lambda-captures-this -arch=sm_86 -o CMakeFiles/szuchydro_pgen.dir/turb.cpp.o -c /home/szuch/Szuchydro/src/pgen/turb.cpp",
+  "file": "/home/szuch/Szuchydro/src/pgen/turb.cpp",
+  "output": "src/pgen/CMakeFiles/szuchydro_pgen.dir/turb.cpp.o"
+},
+{
+  "directory": "/home/szuch/Szuchydro/build-gpu/src/pgen",
+  "command": "/home/szuch/Szuchydro/build/_deps/kokkos-src/bin/nvcc_wrapper -DKOKKOS_DEPENDENCE -I/home/szuch/Szuchydro/src/core/.. -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/core/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/core/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/containers/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/containers/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/algorithms/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/algorithms/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/simd/src -I/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/simd/src -isystem /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/desul/include -isystem /home/szuch/Szuchydro/build-gpu/_deps/kokkos-src/tpls/mdspan/include -O3 -DNDEBUG -std=c++20 -extended-lambda -Wext-lambda-captures-this -arch=sm_86 -o CMakeFiles/szuchydro_pgen.dir/uniform.cpp.o -c /home/szuch/Szuchydro/src/pgen/uniform.cpp",
+  "file": "/home/szuch/Szuchydro/src/pgen/uniform.cpp",
+  "output": "src/pgen/CMakeFiles/szuchydro_pgen.dir/uniform.cpp.o"
+}
+]

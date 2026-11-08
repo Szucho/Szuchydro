@@ -1,5 +1,7 @@
 #include "solver/rhs.hpp"
+#include "core/hydro_config.hpp"
 #include "hydro/hllc.hpp"
+#include "hydro/reconstruction.hpp"
 
 //allocate the fluxes in x, y direcionts
 FaceFluxes AllocateFaceFluxes(const MeshInputs& in){
@@ -11,7 +13,7 @@ FaceFluxes AllocateFaceFluxes(const MeshInputs& in){
 
 //then compute them
 void ComputeFluxes(Mesh& mesh, const View4D& U, Real gamma, const ReconOptions& recon,
-                   const FaceFluxes& F){
+                   const FaceFluxes& F, const View3D& phi, bool well_balanced){
   const int n_active = mesh.num_active_blocks(); //active meshblocks
   if(n_active == 0) return;
   const int nx1 = mesh.inputs().nx1_block; //nx1, nx2 and ng are local to meshblocks
@@ -24,6 +26,7 @@ void ComputeFluxes(Mesh& mesh, const View4D& U, Real gamma, const ReconOptions& 
   View1D block_dx2 = mesh.get_block_dx2_view();
   const View4D fx = F.fx, fy = F.fy;
   const ReconOptions opt = recon; //plain struct copied into the kernels
+  const bool wb = well_balanced && phi.extent(0) > 0;
 
   //x-faces: face f lies between cells i-1 and i, with i = is + f
   Kokkos::parallel_for("FluxesX",
@@ -38,7 +41,12 @@ void ComputeFluxes(Mesh& mesh, const View4D& U, Real gamma, const ReconOptions& 
         p1[k] = U(b, i + 1, j, k);
       }
       Vec4 l, r; //left and right init
-      reconstruct_face(m2, m1, c0, p1, block_dx1(b), gamma, opt, l, r);
+      if(wb){
+        reconstruct_face_wb(m2, m1, c0, p1, phi(b, i-2, j), phi(b, i-1, j), phi(b, i, j),
+                            phi(b, i+1, j), block_dx1(b), gamma, opt.limiter, l, r);
+      } else {
+        reconstruct_face(m2, m1, c0, p1, block_dx1(b), gamma, opt, l, r);
+      }
       const Vec4 flux = FluxhllcX(l, r, gamma); //flux vals
       for(size_t k = 0; k < NVAR; ++k) fx(b, f, jj, k) = flux[k];
       if(f == 0)
@@ -62,7 +70,12 @@ void ComputeFluxes(Mesh& mesh, const View4D& U, Real gamma, const ReconOptions& 
         p1[k] = U(b, i, j + 1, k);
       }
       Vec4 l, r;
-      reconstruct_face(m2, m1, c0, p1, block_dx2(b), gamma, opt, l, r);
+      if(wb){
+        reconstruct_face_wb(m2, m1, c0, p1, phi(b, i, j-2), phi(b, i, j-1), phi(b, i, j),
+                            phi(b, i, j+1), block_dx2(b), gamma, opt.limiter, l, r);
+      } else {
+        reconstruct_face(m2, m1, c0, p1, block_dx2(b), gamma, opt, l, r);
+      }
       const Vec4 flux = FluxhllcY(l, r, gamma);
       for(size_t k = 0; k < NVAR; ++k) fy(b, ii, f, k) = flux[k];
       if(f == 0)

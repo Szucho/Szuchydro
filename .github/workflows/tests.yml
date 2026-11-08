@@ -32,3 +32,6 @@ jobs:
 
       - name: Run tests
         run: python3 tests/run_tests.py --exe build/szuchydro
+
+      - name: Check spectrum script on synthetic fields
+        run: python3 scripts/spectrum.py --selftest

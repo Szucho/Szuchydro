@@ -1,0 +1,51 @@
+# 2D FORWARD ENSTROPHY CASCADE (expected E ~ k^-3 for k > k_f), 1024^2, meant for a GPU build.
+# Forcing at large scales (k = 1..3), subsonic (Mach ~ 0.15), weak drag against the box-scale
+# condensate, least diffusive reconstruction. A STARTING POINT: calibrated at 128^2 only.
+#
+#   ./build/szuchydro examples/turb_forward_1024.txt
+#   python3 scripts/spectrum.py turb_fwd_out --tmin 20 --fit 5 60 --component sol -o fwd.png
+#
+# Check before trusting a spectrum: kinetic energy steady (it should level off), E(k=1) not
+# dominating (otherwise raise turb_drag), compressive share small (otherwise lower turb_accel_rms).
+# At 128^2 the solenoidal slope was ~ -4.5 (too few scales: coherent vortices + dissipation dominate).
+
+Nx 1024
+Ny 1024
+nx1_block 128          # big blocks for GPUs: 64 blocks
+nx2_block 128
+xmin 0.0
+xmax 1.0
+ymin 0.0
+ymax 1.0
+
+Nt 1000
+t0 0.0
+tf 60.0                # ~10 large-eddy turnover times at Mach ~0.15
+cfl 0.4
+n_frames 40            # one snapshot is 32 MB at 1024^2
+use_amr 0
+
+limiter mc             # least diffusive limiter
+reconstruct primitive
+
+gamma 1.4
+gas_profile turb
+gas_rho0 1.0
+gas_p0 1.0
+
+turb_k_low 1
+turb_k_peak 2.0
+turb_k_high 3
+turb_tcorr 0.5
+turb_accel_rms 0.04    # Mach ~0.15 (128^2: 0.25 gave Mach ~0.4); adjust after a short run
+turb_sol_weight 1.0
+turb_drag 0.05         # removes the energy arriving at k = 1
+turb_cool_tau 0.2
+turb_seed 3
+
+bc_left Periodic
+bc_right Periodic
+bc_bottom Periodic
+bc_top Periodic
+
+outdir turb_fwd_out

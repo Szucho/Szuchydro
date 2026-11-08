@@ -1,0 +1,12 @@
+# This is a generated file and its contents are an internal implementation detail.
+# The download step will be re-executed if anything in this file changes.
+# No other meaning or use of this file is supported.
+
+method=url
+command=/usr/bin/cmake;-DCMAKE_MESSAGE_LOG_LEVEL=VERBOSE;-P;/home/szuch/Szuchydro/build-gpu/_deps/kokkos-subbuild/kokkos-populate-prefix/src/kokkos-populate-stamp/download-kokkos-populate.cmake;COMMAND;/usr/bin/cmake;-DCMAKE_MESSAGE_LOG_LEVEL=VERBOSE;-P;/home/szuch/Szuchydro/build-gpu/_deps/kokkos-subbuild/kokkos-populate-prefix/src/kokkos-populate-stamp/verify-kokkos-populate.cmake;COMMAND;/usr/bin/cmake;-DCMAKE_MESSAGE_LOG_LEVEL=VERBOSE;-P;/home/szuch/Szuchydro/build-gpu/_deps/kokkos-subbuild/kokkos-populate-prefix/src/kokkos-populate-stamp/extract-kokkos-populate.cmake
+source_dir=/home/szuch/Szuchydro/build-gpu/_deps/kokkos-src
+work_dir=/home/szuch/Szuchydro/build-gpu/_deps
+url(s)=https://github.com/kokkos/kokkos/archive/refs/tags/5.0.0.zip
+hash=
+      no_extract=
+

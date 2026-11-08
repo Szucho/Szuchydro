@@ -1,0 +1,30 @@
+# Exact test of turb_drag: a uniform flow (u = 0.3, v = 0.4) without forcing in a periodic box.
+# Only the drag acts, so the momentum must decay exactly as exp(-turb_drag t) and the
+# internal energy must stay unchanged.
+Nx 32
+Ny 32
+nx1_block 16
+nx2_block 16
+Nt 100
+t0 0.0
+tf 1.0
+xmin 0.0
+xmax 1.0
+ymin 0.0
+ymax 1.0
+gamma 1.4
+cfl 0.4
+n_frames 2
+use_amr 0
+bc_left Periodic
+bc_right Periodic
+bc_bottom Periodic
+bc_top Periodic
+gas_profile turb
+gas_rho0 1.0
+gas_p0 1.0
+gas_u0 0.3
+gas_v0 0.4
+turb_accel_rms 0.0
+turb_drag 2.0
+outdir turb_drag_out

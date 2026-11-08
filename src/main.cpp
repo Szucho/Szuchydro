@@ -20,6 +20,7 @@
 #include "io/hydro_io.hpp"
 #include "pgen/pgen.hpp"
 #include "solver/time_integrator.hpp"
+#include "solver/potential.hpp"
 
 //CFL time step calculation (GPU/CPU parallel reduction)
 Real compute_cfl_dt(Mesh& mesh, Real gamma, Real cfl_max){
@@ -177,9 +178,34 @@ int main(int argc, char* argv[]){
     for(const auto& key : par.store.unused())
       std::cerr << "Warning: parameter '" << key << "' is not used by this setup (typo?)\n";
 
+    
+    //external potential from the problem (src/solver/potential.*):
+    //tabulated on the mesh, refilled after every regrid.
+    //its source is part of L(U), well-balanced if requested
+    
+    const bool has_potential = static_cast<bool>(hooks.potential);
+    const bool hydrostatic_walls = bc.left.type == BCType::Hydrostatic || bc.right.type == BCType::Hydrostatic ||
+                                   bc.bottom.type == BCType::Hydrostatic || bc.top.type == BCType::Hydrostatic;
+    if(par.well_balanced && !has_potential)
+      throw std::runtime_error("Parameter error: well_balanced 1, but gas_profile '" + par.gas_profile +
+                               "' defines no potential (hooks.potential)");
+    if(hydrostatic_walls && !has_potential)
+      throw std::runtime_error("Parameter error: Hydrostatic walls need a potential, but gas_profile '" +
+                               par.gas_profile + "' defines none (hooks.potential)");
+    if(par.well_balanced && (par.use_amr || !par.refine_regions.empty()))
+      std::cerr << "Warning: well_balanced with mesh refinement (use_amr 1 or refine regions): the balance is\n"
+                   "         exact only within each refinement level; level boundaries create spurious flows.\n"
+                   "         For exact equilibria use a uniform grid (use_amr 0, no refine lines).\n";
+    PotentialField potential;
+    if(has_potential){
+      potential.fill(mesh, hooks.potential);
+      integrator.set_potential(potential.view(), par.well_balanced);
+    }
+
 
     auto apply_bcs = [&](){
       ApplyPhysicalBoundaryConditions(mesh, bc);
+      if(hydrostatic_walls) ApplyHydrostaticGhosts(mesh, potential.view(), bc, par.gamma);
       if(hooks.boundaries) hooks.boundaries(mesh);
     };
 
@@ -315,6 +341,10 @@ int main(int argc, char* argv[]){
           mesh.UpdateDynamicMesh(density_gradient_refine, density_gradient_derefine, par.amr_max_level, derefine_grad_threshold);
 
           //(UpdateDynamicMesh already rebuilt the active block slots and neighbor maps)
+          if(has_potential){ //here we have a new block layout -> tabulate potential again
+            potential.fill(mesh, hooks.potential);
+            integrator.set_potential(potential.view(), par.well_balanced);
+          }
 
           //map old states to new blocks (Direct, Prolongation, Restriction)
           mesh.TransferSolution(old_blocks, old_data);
@@ -342,6 +372,7 @@ int main(int argc, char* argv[]){
         }
 
         //this one, 170 degrees 40 minutes
+        if(hooks.begin_step) hooks.begin_step(mesh, dt);
         integrator.step(mesh, dt, gamma, par.recon, hooks.smooth_sources);
         //you work hard, you recover harder
         ApplyReflux(mesh, dt);

@@ -1,0 +1,2 @@
+/usr/bin/ar qc libszuchydro_physics.a CMakeFiles/szuchydro_physics.dir/disk_physics.cpp.o CMakeFiles/szuchydro_physics.dir/turbulence.cpp.o
+/usr/bin/ranlib libszuchydro_physics.a

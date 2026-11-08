@@ -9,6 +9,16 @@ Physics problems checks:
     sod_amr_level2      AMR capped at amr_max_level 2 (tests AMR parameters)
     invalid_params      bad input must stop with 'Parameter error' and an exit code 1
     invalid_integrator  unknown integrator must stop with a "Parameter error"
+    turb_solenoidal     driven turbulent box, solenoidal driving: conservation, Mach, mostly vortical, mode list
+    turb_compressive    the same with compressive driving: mostly compressive flow
+    invalid_turb_bc     turb with non-periodic walls must stop with 'Parameter error'
+    turb_drag           exact: uniform flow without forcing decays as exp(-turb_drag t), internal energy unchanged
+    wb_isothermal       well-balanced isothermal atmosphere: at rest to machine precision
+    wb_tjump            the same with a tenfold temperature jump
+    nowb_isothermal     well_balanced 0: must drift (the switch matters)
+    wb_harmonic_axes    harmonic potential along y and x: at rest, x == transposed y (all 4 walls)
+    wb_perturbation     a 1e-6 pressure pulse propagates; the far field stays at round-off
+    invalid_wb_no_potential / invalid_hydrostatic_no_potential   must stop with 'Parameter error'
     sod_vanleer, sod_superbee, sod_mc, sod_primitive   Sod with each limiter / primitive reconstruction
     dirichlet_contact_x/_y  contact carried in through a Dirichlet wall
     contact_primitive   the same with primitive reconstruction: u and p uniform to round-off
@@ -32,7 +42,7 @@ Usage:
 Exit code 0 = all passed, 1 = something failed (CI uses this)
 """
 
-import argparse, hashlib, json, os, shutil, struct, subprocess, sys, tempfile, time
+import argparse, re, hashlib, json, os, shutil, struct, subprocess, sys, tempfile, time
 import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -342,6 +352,36 @@ def check_sedov(res, frames, gamma, p_amb, l1_limit):
         res.check(f"{name} conservation |dQ|/Q", rel, rel < 1e-12, "< 1e-12")
 
 
+TURB_DEFAULT_MODES = [(0, 1), (0, 2), (1, -2), (1, -1), (1, 0), (1, 1), (1, 2), (2, -1), (2, 0), (2, 1)]
+
+
+def check_turb(res, frames, gamma, log, comp_range, mach_range):
+    """Driven periodic box: no net mass or momentum change, saturated Mach number in range, and
+    the compressive share of the kinetic energy (Helmholtz decomposition by FFT) in range."""
+    t0, t1 = totals(frames[0]), totals(frames[-1])
+    dm = abs(t1[0]/t0[0] - 1)
+    res.check("mass conservation |dM|/M", dm, dm < 1e-12, "< 1e-12")
+    x, y, Q = stitch(frames[-1])
+    rho, u, v, p = primitives(Q, gamma)
+    cs = np.sqrt(gamma*p/rho)
+    vrms = np.sqrt(np.mean(rho*(u*u + v*v))/np.mean(rho))
+    mom = np.hypot(t1[1], t1[2])/(t1[0]*vrms)
+    res.check("net momentum |P|/(M v_rms)", mom, mom < 1e-12, "< 1e-12")
+    mach = vrms/np.mean(cs)
+    res.check("Mach_rms", mach, mach_range[0] < mach < mach_range[1], f"in {mach_range}")
+    uk, vk = np.fft.fft2(u - u.mean()), np.fft.fft2(v - v.mean())
+    kx = np.fft.fftfreq(u.shape[0])[:, None]; ky = np.fft.fftfreq(u.shape[1])[None, :]
+    k2 = kx**2 + ky**2; k2[0, 0] = 1.0
+    dot = (kx*uk + ky*vk)/k2
+    e_comp = np.sum(np.abs(dot*kx)**2 + np.abs(dot*ky)**2)
+    e_tot = np.sum(np.abs(uk)**2 + np.abs(vk)**2)
+    frac = float(e_comp/e_tot)
+    res.check("compressive energy fraction", frac, comp_range[0] < frac < comp_range[1], f"in {comp_range}")
+    line = [l for l in log.splitlines() if l.startswith("turb:")]
+    modes = [tuple(map(int, m)) for m in re.findall(r"\((-?\d+),(-?\d+)\)", line[0])] if line else []
+    res.check("mode list = default shell (10 modes)", len(modes), modes == TURB_DEFAULT_MODES, "= expected list")
+
+
 def disk_fields(frame, gamma):
     x, y, Q = stitch(frame)
     rho, u, v, p = primitives(Q, gamma)
@@ -415,7 +455,44 @@ def test_outflow_walls(exe, workdir):
     res.check("blocked wall slows the flow: |u_wall + 0.5|", abs(u_wall + 0.5), abs(u_wall + 0.5) > 0.1, "> 0.1")
     return res
 
+def atmosphere_rest(res, frames, gamma, tol):
+    """Hydrostatic equilibrium kept at rest: velocities, density change and mass change."""
+    x, y, Q = stitch(frames[-1])
+    rho, u, v, p = primitives(Q, gamma)
+    _, _, Q0 = stitch(frames[0])
+    mach = float(np.max(np.hypot(u, v)/np.sqrt(gamma*p/rho)))
+    drho = float(np.max(np.abs(rho/Q0[0] - 1)))
+    dm = abs(totals(frames[-1])[0]/totals(frames[0])[0] - 1)
+    res.check("max |v|/cs", mach, mach < tol, f"< {tol:g}")
+    res.check("max |rho/rho0 - 1|", drho, drho < tol, f"< {tol:g}")
+    res.check("mass change", dm, dm < tol, f"< {tol:g}")
+    return mach
+
+
+def test_wb_harmonic_axes(exe, workdir):
+    """Harmonic potential with a temperature jump, stratified along y and along x (Hydrostatic walls
+    bottom/top resp. left/right): both at rest, and the x-run transposed equals the y-run."""
+    res = Result("wb_harmonic_axes")
+    res.runtime, res.outdir = 0.0, None
+    fields = {}
+    for case in ["y", "x"]:
+        code, log, dt, outdir = run_case(exe, "wb_harmonic_" + case, workdir)
+        res.runtime += dt
+        res.check(f"exit code ({case})", code, code == 0, "= 0")
+        if code != 0:
+            res.log_tail = "\n".join(log.replace("\r", "\n").splitlines()[-15:])
+            return res
+        frames = read_frames(os.path.join(outdir, "grid.bin"))
+        atmosphere_rest(res, frames, 1.4, 1e-12)
+        fields[case] = stitch(frames[-1])[2]
+    d = float(np.max(np.abs(fields["x"].transpose(0, 2, 1) - fields["y"])))
+    res.check("x-run transposed vs y-run (max abs difference)", d, d < 1e-12, "< 1e-12")
+    return res
+
+
 def test_case(exe, name, workdir):
+    if name == "wb_harmonic_axes":  # runs two cases and compares them with each other
+        return test_wb_harmonic_axes(exe, workdir)
     if name == "outflow_walls":  #runs four cases and compares them with each other
         return test_outflow_walls(exe, workdir)
     res = Result(name)
@@ -489,6 +566,39 @@ def test_case(exe, name, workdir):
         check_contact(res, frames, gamma, "y", uniform_tol=1e-8)
     elif name == "contact_primitive":
         check_contact(res, frames, gamma, "x", uniform_tol=1e-12)
+    elif name in ("wb_isothermal", "wb_tjump"):
+        atmosphere_rest(res, frames, gamma, 1e-12)
+    elif name == "nowb_isothermal":  # the counter-check: without balancing, the equilibrium drifts
+        _, _, Q = stitch(frames[-1])
+        rho, u, v, p = primitives(Q, gamma)
+        mach = float(np.max(np.hypot(u, v)/np.sqrt(gamma*p/rho)))
+        res.check("max |v|/cs (must drift)", mach, mach > 1e-6, "> 1e-6")
+    elif name == "wb_perturbation":
+        x, y, Q = stitch(frames[-1])
+        rho, u, v, p = primitives(Q, gamma)
+        X, Y = np.meshgrid(x, y, indexing="ij")
+        r = np.hypot(X - 1.0, Y - 2.0)
+        mach = np.hypot(u, v)/np.sqrt(gamma*p/rho)
+        wave, far = float(mach[r < 0.9].max()), float(mach[r > 1.3].max())
+        res.check("wave: max |v|/cs for r < 0.9", wave, 1e-8 < wave < 1e-6, "in (1e-8, 1e-6)")
+        res.check("far field: max |v|/cs for r > 1.3", far, far < 1e-12, "< 1e-12")
+    elif name == "turb_drag":
+        t = frames[-1][0]
+        (_, b0, a0), (_, b1, a1) = frames[0], frames[-1]
+        t0, t1 = totals(frames[0]), totals(frames[-1])
+        expect = np.exp(-2.0 * t)                       # turb_drag 2.0
+        for k, nm in [(1, "x"), (2, "y")]:
+            err = abs(t1[k]/t0[k]/expect - 1)
+            res.check(f"momentum {nm}: P(t)/P0 vs exp(-alpha t)", err, err < 1e-12, "< 1e-12 (relative)")
+        Q0, Q1 = np.stack(a0), np.stack(a1)
+        e0 = Q0[..., 3] - 0.5*(Q0[..., 1]**2 + Q0[..., 2]**2)/Q0[..., 0]
+        e1 = Q1[..., 3] - 0.5*(Q1[..., 1]**2 + Q1[..., 2]**2)/Q1[..., 0]
+        de = float(np.max(np.abs(e1/e0 - 1)))
+        res.check("internal energy unchanged", de, de < 1e-12, "< 1e-12 (relative)")
+    elif name == "turb_solenoidal":
+        check_turb(res, frames, gamma, log, comp_range=(0.0, 0.25), mach_range=(0.3, 2.0))
+    elif name == "turb_compressive":
+        check_turb(res, frames, gamma, log, comp_range=(0.8, 1.0), mach_range=(0.05, 0.5))
     elif name == "sedov_uniform":
         check_sedov(res, frames, gamma, p_amb=1e-5, l1_limit=0.18)
     elif name == "sedov_amr":
@@ -520,7 +630,10 @@ ALL = ["sod_uniform", "sod_smr", "sod_amr", "sod_amr_level2",
        "dirichlet_contact_x", "dirichlet_contact_y", "contact_primitive",
        "sedov_uniform", "sedov_amr", "disk_equilibrium", "disk_stirred",
        "outflow_walls", "unused_param_warning", "invalid_params",
-       "invalid_dirichlet", "invalid_problem", "invalid_number", "invalid_integrator"]
+       "invalid_dirichlet", "invalid_problem", "invalid_number", "invalid_integrator",
+       "turb_solenoidal", "turb_compressive", "invalid_turb_bc", "turb_drag",
+       "wb_isothermal", "wb_tjump", "nowb_isothermal", "wb_harmonic_axes", "wb_perturbation",
+       "invalid_wb_no_potential", "invalid_hydrostatic_no_potential"]
 
 def main():
     ap = argparse.ArgumentParser(description="Szuchydro test suite")
@@ -574,8 +687,8 @@ def main():
     if a.compare_ref:
         ref_file = os.path.join(a.compare_ref, "hashes.json")
         if not os.path.isfile(ref_file):
-            sys.exit(f"\nno references in {a.compare_ref}:"
-                     "save them first with --save-ref {a.compare_ref}")
+            sys.exit(f"\nno references in {a.compare_ref}: "
+                     f"save them first with --save-ref {a.compare_ref}")
         ref = json.load(open(ref_file))
         tol_txt = f" (accepting relative differences <= {a.tol:g})" if a.tol > 0 else ""
         print(f"\nbit-for-bit comparison{tol_txt}:")

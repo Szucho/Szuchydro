@@ -91,3 +91,52 @@ void reconstruct_face(const Vec4& m2, const Vec4& m1, const Vec4& c0, const Vec4
   l = prim_to_cons(a, gamma);
   r = prim_to_cons(b, gamma);
 }
+
+//Well-balanced variant of reconstruct_face for an external potential phi (Käppeli & Mishra 2016,
+//linear hydrostatic extrapolation). rho, u, v are reconstructed as in the primitive branch: the
+//pressure is split in each cell into a hydrostatic part p0, extrapolated with phi, and a
+//perturbation p1 = p - p0, and only p1 is limited:
+//  in cell i:     p0(x) = p_i - rho_i (phi(x) - phi_i),   phi at a face = mean of the two cells
+//  neighbours:    p0_{i+-1} = p_i -+ (rho_i + rho_{i+-1})/2 (phi_{i+-1} - phi_i)
+//                 p1_{i+-1} = p_{i+-1} - p0_{i+-1},  p1_i = 0
+//In a discrete hydrostatic equilibrium, p_{i+1} - p_i = -(rho_i + rho_{i+1})/2 (phi_{i+1} - phi_i),
+//all p1 vanish, both sides of every face get the same pressure, and the flux difference cancels
+//the potential source -rho_i (phi_{i+1} - phi_{i-1})/(2 dx) to machine precision. This holds for
+//ANY temperature profile in a potential that varies along the reconstruction direction.
+KOKKOS_INLINE_FUNCTION
+void reconstruct_face_wb(const Vec4& m2, const Vec4& m1, const Vec4& c0, const Vec4& p1,
+                         Real phi_m2, Real phi_m1, Real phi_c0, Real phi_p1,
+                         Real dk, Real gamma, int limiter, Vec4& l, Vec4& r){
+  Vec4 wm2 = cons_to_prim(m2, gamma), wm1 = cons_to_prim(m1, gamma);
+  Vec4 w0  = cons_to_prim(c0, gamma), wp1 = cons_to_prim(p1, gamma);
+  //rho, u, v: ordinary limited reconstruction (the pressure component is replaced below)
+  Vec4 s_m1 = limited_slope(wm2, wm1, w0, dk, limiter);
+  Vec4 s_0  = limited_slope(wm1, w0, wp1, dk, limiter);
+  Vec4 a, b;
+  for(size_t k = 0; k < NVAR; ++k){
+    a[k] = wm1[k] + 0.5*dk*s_m1[k];
+    b[k] = w0[k]  - 0.5*dk*s_0[k];
+  }
+  //left state (cell m1, extrapolated to its right edge)
+  {
+    const Real rho = wm1[IDN], p = wm1[IP];
+    const Real p0_face = p - 0.5*rho*(phi_c0 - phi_m1);
+    const Real q_m = wm2[IP] - (p + 0.5*(rho + wm2[IDN])*(phi_m1 - phi_m2)); //p1 of the left neighbour
+    const Real q_p = w0[IP]  - (p - 0.5*(rho + w0[IDN])*(phi_c0 - phi_m1));  //p1 of the right neighbour
+    const Vec4 sl = limited_slope(Vec4{q_m, 0.0, 0.0, 0.0}, Vec4{0.0, 0.0, 0.0, 0.0},
+                                  Vec4{q_p, 0.0, 0.0, 0.0}, dk, limiter);
+    a[IP] = p0_face + 0.5*dk*sl[0];
+  }
+  //right state (cell c0, extrapolated to its left edge)
+  {
+    const Real rho = w0[IDN], p = w0[IP];
+    const Real p0_face = p + 0.5*rho*(phi_c0 - phi_m1);
+    const Real q_m = wm1[IP] - (p + 0.5*(rho + wm1[IDN])*(phi_c0 - phi_m1));
+    const Real q_p = wp1[IP] - (p - 0.5*(rho + wp1[IDN])*(phi_p1 - phi_c0));
+    const Vec4 sl = limited_slope(Vec4{q_m, 0.0, 0.0, 0.0}, Vec4{0.0, 0.0, 0.0, 0.0},
+                                  Vec4{q_p, 0.0, 0.0, 0.0}, dk, limiter);
+    b[IP] = p0_face - 0.5*dk*sl[0];
+  }
+  l = prim_to_cons(a, gamma);
+  r = prim_to_cons(b, gamma);
+}

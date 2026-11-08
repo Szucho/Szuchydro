@@ -104,9 +104,13 @@ void AddDiskSourceTerms(Mesh& mesh, const DiskModel& m, const StirringForce& sti
   const int nx1 = mesh.inputs().nx1_block, nx2 = mesh.inputs().nx2_block;
   const int ng = mesh.inputs().nghost;
 
-  //per-block geometry: slot, x1min, x2min, dx1, dx2
-  Kokkos::View<Real*[4], Kokkos::HostSpace> h_geo("h_geo", n_active);
-  Kokkos::View<int*, Kokkos::HostSpace> h_slot("h_slot", n_active);
+  //per-block geometry: slot, x1min, x2min, dx1, dx2. Host copies are mirrors of the device views:
+  //a mirror always has the device view's memory layout (CUDA uses a different default layout
+  //than the CPU, and deep_copy between memory spaces needs identical layouts)
+  Kokkos::View<Real*[4]> geo("geo", n_active);
+  Kokkos::View<int*> slot("slot", n_active);
+  auto h_geo  = Kokkos::create_mirror_view(geo);
+  auto h_slot = Kokkos::create_mirror_view(slot);
   const auto& blocks = mesh.blocks();
   for(int b = 0; b < n_active; ++b){
     h_slot(b) = blocks[b]->slot_id;
@@ -115,8 +119,6 @@ void AddDiskSourceTerms(Mesh& mesh, const DiskModel& m, const StirringForce& sti
     h_geo(b, 2) = blocks[b]->dx1();
     h_geo(b, 3) = blocks[b]->dx2();
   }
-  Kokkos::View<Real*[4]> geo("geo", n_active);
-  Kokkos::View<int*> slot("slot", n_active);
   Kokkos::deep_copy(geo, h_geo);
   Kokkos::deep_copy(slot, h_slot);
 
@@ -227,8 +229,10 @@ void ApplyDiskBoundaries(Mesh& mesh, const DiskModel& m, Real gamma){
   const int nx1 = mesh.inputs().nx1_block, nx2 = mesh.inputs().nx2_block;
   const int ng = mesh.inputs().nghost;
 
-  Kokkos::View<Real*[4], Kokkos::HostSpace> h_geo("h_geo_bc", n_active);
-  Kokkos::View<int*[5], Kokkos::HostSpace> h_info("h_info_bc", n_active); //slot, phys XM,XP,YM,YP
+  Kokkos::View<Real*[4]> geo("geo_bc", n_active);
+  Kokkos::View<int*[5]> info("info_bc", n_active); //slot, phys XM,XP,YM,YP
+  auto h_geo  = Kokkos::create_mirror_view(geo);  //mirrors: same layout as the device views
+  auto h_info = Kokkos::create_mirror_view(info);
   const auto& blocks = mesh.blocks();
   for(int b = 0; b < n_active; ++b){
     h_info(b, 0) = blocks[b]->slot_id;
@@ -238,8 +242,6 @@ void ApplyDiskBoundaries(Mesh& mesh, const DiskModel& m, Real gamma){
     h_geo(b, 2) = blocks[b]->dx1();
     h_geo(b, 3) = blocks[b]->dx2();
   }
-  Kokkos::View<Real*[4]> geo("geo_bc", n_active);
-  Kokkos::View<int*[5]> info("info_bc", n_active);
   Kokkos::deep_copy(geo, h_geo);
   Kokkos::deep_copy(info, h_info);
 

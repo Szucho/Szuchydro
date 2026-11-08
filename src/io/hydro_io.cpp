@@ -1,4 +1,5 @@
 #include "io/hydro_io.hpp"
+#include "core/hydro_config.hpp"
 #include "io/param_store.hpp"
 #include "mesh/mesh.hpp"
 #include <stdexcept>
@@ -85,6 +86,7 @@ SimParams readParams(const std::string& filename){ //reads in params.txt
   else if(lim == "mc")       p.recon.limiter = LIM_MC;
   else throw std::runtime_error("Parameter error: unknown limiter '" + lim + "' (minmod, vanleer, superbee, mc)");
   p.integrator = has("integrator") ? get("integrator") : "euler";
+  p.well_balanced = has("well_balanced") ? (geti("well_balanced") != 0) : false;
   const std::string rec = has("reconstruct") ? get("reconstruct") : "conserved";
   if     (rec == "conserved") p.recon.primitive = false;
   else if(rec == "primitive") p.recon.primitive = true;
@@ -140,11 +142,12 @@ SimParams readParams(const std::string& filename){ //reads in params.txt
 
 //now that we have BC-s in the input, we want to use those as keys for the simulation
 BCType parseBC(const std::string& s){
-  if      (s == "Open")      return BCType::Open;
-  else if (s == "Closed")    return BCType::Closed;
-  else if (s == "Periodic")  return BCType::Periodic;
-  else if (s == "Dirichlet") return BCType::Dirichlet;
-  else if (s == "Outflow")   return BCType::Outflow;
+  if      (s == "Open")        return BCType::Open;
+  else if (s == "Closed")      return BCType::Closed;
+  else if (s == "Periodic")    return BCType::Periodic;
+  else if (s == "Dirichlet")   return BCType::Dirichlet;
+  else if (s == "Outflow")     return BCType::Outflow;
+  else if (s == "Hydrostatic") return BCType::Hydrostatic;
   else throw std::invalid_argument("Unknown BC type: " + s);
 }
 
