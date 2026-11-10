@@ -608,15 +608,20 @@ def test_case(exe, name, workdir):
     #each option must leave a fingerprint that the default 
     #cannot produce, so a silently ignored option fails the test
     elif name == "sod_vanleer":
-        check_sod(res, frames, gamma, l1_limit=2.1e-3)
+        check_sod(res, frames, gamma, l1_limit=2.9e-3) #vl2 van leer for reference
+        check_sod_contact_width(res, frames, max_cells=3)
     elif name == "sod_mc":
-        check_sod(res, frames, gamma, l1_limit=2.1e-3)
-        check_sod_contact_width(res, frames, max_cells=2)
+        check_sod(res, frames, gamma, l1_limit=2.8e-3)
+        check_sod_contact_width(res, frames, max_cells=3)
     elif name == "sod_superbee":
         check_sod(res, frames, gamma, l1_limit=4e-3)
         check_sod_contact_width(res, frames, max_cells=2)
     elif name == "sod_primitive":
-        check_sod(res, frames, gamma, l1_limit=2.2e-3)
+        check_sod(res, frames, gamma, l1_limit=4e-3)
+        code, log, dt, out = run_variant(exe, name, ["reconstruct conserved"], workdir)
+        _, _, Qc = stitch(read_frames(os.path.join(out, "grid.bin"))[-1])
+        d = float(np.max(np.abs(Q[0] - Qc[0])))
+        res.check("differs from conserved reconstruction", d, d > 1e-4, "> 1e-4")
     elif name == "dirichlet_contact_x":
         check_contact(res, frames, gamma, "x", uniform_tol=1e-8)
     elif name == "dirichlet_contact_y":

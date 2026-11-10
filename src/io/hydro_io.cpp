@@ -85,7 +85,7 @@ SimParams readParams(const std::string& filename){ //reads in params.txt
   else if(lim == "superbee") p.recon.limiter = LIM_SUPERBEE;
   else if(lim == "mc")       p.recon.limiter = LIM_MC;
   else throw std::runtime_error("Parameter error: unknown limiter '" + lim + "' (minmod, vanleer, superbee, mc)");
-  p.integrator = has("integrator") ? get("integrator") : "euler";
+  p.integrator = has("integrator") ? get("integrator") : "vl2";
   p.well_balanced = has("well_balanced") ? (geti("well_balanced") != 0) : false;
   const std::string rec = has("reconstruct") ? get("reconstruct") : "conserved";
   if     (rec == "conserved") p.recon.primitive = false;
