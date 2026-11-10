@@ -69,5 +69,7 @@ void ProblemSedov  (Mesh& mesh, const SimParams& par, ProblemHooks& hooks); //se
 void ProblemDiskRz (Mesh& mesh, const SimParams& par, ProblemHooks& hooks); //disk_rz.cpp
 void ProblemTurb   (Mesh& mesh, const SimParams& par, ProblemHooks& hooks); //turb.cpp
 void ProblemAtmosphere (Mesh& mesh, const SimParams& par, ProblemHooks& hooks); //atmosphere.cpp
+void ProblemAdvect (Mesh& mesh, const SimParams& par, ProblemHooks& hooks); //advect.cpp
+void ProblemVortex (Mesh& mesh, const SimParams& par, ProblemHooks& hooks); //vortex.cpp
 
 //list extra problems below this comment

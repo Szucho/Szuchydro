@@ -1,7 +1,0 @@
-{
-	"InstallScripts" : 
-	[
-		"/home/szuch/Szuchydro/build-gpu/_deps/kokkos-subbuild/cmake_install.cmake"
-	],
-	"Parallel" : false
-}

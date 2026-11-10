@@ -373,7 +373,8 @@ int main(int argc, char* argv[]){
 
         //this one, 170 degrees 40 minutes
         if(hooks.begin_step) hooks.begin_step(mesh, dt);
-        integrator.step(mesh, dt, gamma, par.recon, hooks.smooth_sources);
+        integrator.step(mesh, dt, gamma, par.recon, hooks.smooth_sources,
+                        [&](){ ExchangeGhostZones(mesh), apply_bcs(); }); //between stages
         //you work hard, you recover harder
         ApplyReflux(mesh, dt);
         if(hooks.source_terms) hooks.source_terms(mesh, dt);

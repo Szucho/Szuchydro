@@ -13,7 +13,8 @@ FaceFluxes AllocateFaceFluxes(const MeshInputs& in){
 
 //then compute them
 void ComputeFluxes(Mesh& mesh, const View4D& U, Real gamma, const ReconOptions& recon,
-                   const FaceFluxes& F, const View3D& phi, bool well_balanced){
+                   const FaceFluxes& F, const View3D& phi, 
+                   bool well_balanced, bool first_order){
   const int n_active = mesh.num_active_blocks(); //active meshblocks
   if(n_active == 0) return;
   const int nx1 = mesh.inputs().nx1_block; //nx1, nx2 and ng are local to meshblocks
@@ -27,6 +28,7 @@ void ComputeFluxes(Mesh& mesh, const View4D& U, Real gamma, const ReconOptions& 
   const View4D fx = F.fx, fy = F.fy;
   const ReconOptions opt = recon; //plain struct copied into the kernels
   const bool wb = well_balanced && phi.extent(0) > 0;
+  const bool fo = first_order;
 
   //x-faces: face f lies between cells i-1 and i, with i = is + f
   Kokkos::parallel_for("FluxesX",
@@ -41,7 +43,11 @@ void ComputeFluxes(Mesh& mesh, const View4D& U, Real gamma, const ReconOptions& 
         p1[k] = U(b, i + 1, j, k);
       }
       Vec4 l, r; //left and right init
-      if(wb){
+      if(fo){ //first order (VL2 predictor)
+        if(wb) reconstruct_face_wb_first_order(m1, c0, phi(b, i-1, j), phi(b, i, j), gamma, l, r);
+        else reconstruct_face_first_order(m1, c0, l, r);
+      
+      } else if(wb){
         reconstruct_face_wb(m2, m1, c0, p1, phi(b, i-2, j), phi(b, i-1, j), phi(b, i, j),
                             phi(b, i+1, j), block_dx1(b), gamma, opt.limiter, l, r);
       } else {
@@ -70,7 +76,10 @@ void ComputeFluxes(Mesh& mesh, const View4D& U, Real gamma, const ReconOptions& 
         p1[k] = U(b, i, j + 1, k);
       }
       Vec4 l, r;
-      if(wb){
+      if(fo){ //first odrer (VL2 predictor)
+        if(wb) reconstruct_face_wb_first_order(m1, c0, phi(b, i, j-1), phi(b, i, j), gamma, l, r);
+        else reconstruct_face_first_order(m1, c0, l, r);
+      } else if(wb){
         reconstruct_face_wb(m2, m1, c0, p1, phi(b, i, j-2), phi(b, i, j-1), phi(b, i, j),
                             phi(b, i, j+1), block_dx2(b), gamma, opt.limiter, l, r);
       } else {
@@ -108,6 +117,33 @@ void ApplyFluxDivergence(Mesh& mesh, const View4D& U_from, const View4D& U_to,
       for(size_t k = 0; k < NVAR; ++k){ //update state using face fluxes
         U_to(b, i, j, k) = U_from(b, i, j, k) - (dt/dx)*(fx(b, fi + 1, fj, k) - fx(b, fi, fj, k))
                                               - (dt/dy)*(fy(b, fi, fj + 1, k) - fy(b, fi, fj, k));
+      }
+    }
+  );
+}
+
+void CombineFluxDivergence(Mesh& mesh, const View4D& U_a, const View4D& U_b, const View4D& U_to,
+                           const FaceFluxes& F, Real dt, Real ca, Real cb){
+  const int n_active = mesh.num_active_blocks();
+  if(n_active == 0) return;
+  const int nx1 = mesh.inputs().nx1_block;
+  const int nx2 = mesh.inputs().nx2_block;
+  const int ng  = mesh.inputs().nghost;
+  const int is = ng, ie = ng + nx1 - 1;
+  const int js = ng, je = ng + nx2 - 1;
+  View1D block_dx1 = mesh.get_block_dx1_view();
+  View1D block_dx2 = mesh.get_block_dx2_view();
+  const View4D fx = F.fx, fy = F.fy;
+
+  Kokkos::parallel_for("CombineFluxDivergence",
+    Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0, is, js}, {n_active, ie + 1, je + 1}),
+    KOKKOS_LAMBDA(const int b, const int i, const int j){
+      const Real dx = block_dx1(b), dy = block_dx2(b);
+      const int fi = i - is, fj = j - js;
+      for(size_t k = 0; k < NVAR; ++k){
+        const Real ub = U_b(b, i, j, k) - (dt/dx)*(fx(b, fi + 1, fj, k) - fx(b, fi, fj, k))
+                                        - (dt/dy)*(fy(b, fi, fj + 1, k) - fy(b, fi, fj, k));
+        U_to(b, i, j, k) = ca*U_a(b, i, j, k) + cb*ub;
       }
     }
   );

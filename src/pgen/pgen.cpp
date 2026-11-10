@@ -11,6 +11,8 @@ static const ProblemEntry problems[] = {
   {"disk_Rz", ProblemDiskRz,  "stirred protoplanetary disk with winds in the R-z plane"},
   {"turb",    ProblemTurb,    "driven turbulence in a periodic box (few-mode OU forcing, turb_* keys)"},
   {"atmosphere", ProblemAtmosphere, "stratified layer in hydro equilibrium in external potential (atm_*keys)"},
+  {"advect",  ProblemAdvect,  "advected density sine wave (convergence test, adv_* keys)"},
+  {"vortex",  ProblemVortex,  "isentropic vortex [Yeet et al. 1999] (convergence test, vortex_* keys)"},
 };
 
 //here we find the problem we wish to solve

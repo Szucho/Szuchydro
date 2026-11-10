@@ -1,2 +1,0 @@
-/usr/bin/ar qc libszuchydro_io.a CMakeFiles/szuchydro_io.dir/hydro_io.cpp.o
-/usr/bin/ranlib libszuchydro_io.a

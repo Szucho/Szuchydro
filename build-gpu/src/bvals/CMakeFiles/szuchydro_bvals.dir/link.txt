@@ -1,2 +1,0 @@
-/usr/bin/ar qc libszuchydro_bvals.a CMakeFiles/szuchydro_bvals.dir/bvals.cpp.o
-/usr/bin/ranlib libszuchydro_bvals.a

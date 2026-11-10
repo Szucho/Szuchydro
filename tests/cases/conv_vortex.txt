@@ -1,0 +1,28 @@
+# Convergence test: isentropic vortex (Yee et al. 1999), one full period (t = 10): exact = initial state.
+# Base case of conv_vortex: the runner overrides Nx/Ny (32, 64) and the integrator (euler, vl2, rk2).
+nx1_block 16
+nx2_block 16
+Nt 1000
+t0 0.0
+tf 10.0
+xmin -5.0
+xmax 5.0
+ymin -5.0
+ymax 5.0
+gamma 1.4
+cfl 0.4
+n_frames 1
+use_amr 0
+limiter mc
+bc_left Periodic
+bc_right Periodic
+bc_bottom Periodic
+bc_top Periodic
+gas_profile vortex
+gas_u0 1.0
+gas_v0 1.0
+vortex_beta 5.0
+Nx 32
+Ny 32
+integrator euler
+outdir conv_vortex_out

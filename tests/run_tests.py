@@ -19,6 +19,8 @@ Physics problems checks:
     wb_harmonic_axes    harmonic potential along y and x: at rest, x == transposed y (all 4 walls)
     wb_perturbation     a 1e-6 pressure pulse propagates; the far field stays at round-off
     invalid_wb_no_potential / invalid_hydrostatic_no_potential   must stop with 'Parameter error'
+    conv_advect, conv_vortex   order of accuracy (N = 32, 64) for euler, vl2, rk2: vl2/rk2 second order
+    wb_tjump_vl2/_rk2, sedov_amr_vl2, sod_amr_rk2, turb_solenoidal_vl2   the delicate parts with vl2/rk2
     sod_vanleer, sod_superbee, sod_mc, sod_primitive   Sod with each limiter / primitive reconstruction
     dirichlet_contact_x/_y  contact carried in through a Dirichlet wall
     contact_primitive   the same with primitive reconstruction: u and p uniform to round-off
@@ -49,6 +51,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 TIMEOUT_S = 600  # per test, the slowest test takes about 10 s
 CASES = os.path.join(HERE, "cases")
 NVAR = 4
+EXTRA = [] #set by --extra
 HDR, BLK = "<dQ", "<iqqddddQQ" #16, 72 byte
 HS, BS = struct.calcsize(HDR), struct.calcsize(BLK)
 
@@ -400,6 +403,9 @@ def check_finite_positive(res, Q, gamma):
 def run_case(exe, name, workdir):
     src = os.path.join(CASES, name + ".txt") #input file
     shutil.copy(src, workdir)
+    if EXTRA: #--extra: lines appended to every case
+        with open(os.path.join(workdir, name + ".txt"), "a") as f:
+            f.write("\n" + "\n".join(EXTRA) + "\n")
     t0 = time.time()
     try: #run sim, hanging run (e.g. caused by Nan somewhere) becomes a clean failure
         r = subprocess.run([exe, name + ".txt"], cwd=workdir, capture_output=True, text=True, timeout=TIMEOUT_S)
@@ -417,6 +423,49 @@ def run_case(exe, name, workdir):
         if len(parts) == 2 and parts[0] == "outdir":
             outdir = os.path.join(workdir, parts[1])
     return r.returncode, log, dt, outdir
+
+def run_variant(exe, base, overrides, workdir):
+    """Run test case 'base' with extra lines appended (a repeated key overrides the case's value);
+    the variant gets its own name and output directory."""
+    tag = "_".join(v.split()[-1] for v in overrides)
+    name = f"{base}__{tag}"
+    with open(os.path.join(CASES, base + ".txt")) as f:
+        txt = f.read()
+    txt += "\n" + "\n".join(overrides) + f"\noutdir {name}_out\n"
+    with open(os.path.join(workdir, name + ".txt"), "w") as f:
+        f.write(txt)
+    t0 = time.time()
+    r = subprocess.run([exe, name + ".txt"], cwd=workdir, capture_output=True, text=True, timeout=TIMEOUT_S)
+    return r.returncode, r.stdout + r.stderr, time.time() - t0, os.path.join(workdir, name + "_out")
+
+def test_convergence(exe, name, workdir, limits, ratio):
+    """Order of accuracy: L1(rho) after one full period (exact solution = initial cell averages)
+    at N = 32 and 64, for each integrator. limits: {integrator: (min_order, max_order)};
+    ratio: (integrator, max error relative to euler at N = 64)."""
+    res = Result(name)
+    res.runtime, res.outdir = 0.0, None
+    err = {}
+    for integ in ["euler", "vl2", "rk2"]:
+        for N in (32, 64):
+            code, log, dt, outdir = run_variant(exe, name, [f"Nx {N}", f"Ny {N}", f"integrator {integ}"], workdir)
+            res.runtime += dt
+            if code != 0:
+                res.check(f"exit code ({integ}, N={N})", code, False, "= 0")
+                res.log_tail = "\n".join(log.replace("\r", "\n").splitlines()[-15:])
+                return res
+            fr = read_frames(os.path.join(outdir, "grid.bin"))
+            _, _, Q0 = stitch(fr[0])
+            _, _, Q1 = stitch(fr[-1])
+            err[(integ, N)] = float(np.mean(np.abs(Q1[0] - Q0[0])))
+    for integ, (lo, hi) in limits.items():
+        order = np.log2(err[(integ, 32)]/err[(integ, 64)])
+        res.check(f"order of accuracy ({integ})", order, lo < order < hi, f"in ({lo:g}, {hi:g})")
+    for integ, r in ratio:
+        q = err[(integ, 64)]/err[("euler", 64)]
+        res.check(f"L1 error {integ} / euler at N=64", q, q < r, f"< {r:g}")
+    return res
+
+
 
 def test_outflow_walls(exe, workdir):
     """gas streams towards each wall in turn (cases outflow_left/right/bottom/top), with Outflow
@@ -491,6 +540,14 @@ def test_wb_harmonic_axes(exe, workdir):
 
 
 def test_case(exe, name, workdir):
+    if name == "conv_advect":
+        return test_convergence(exe, name, workdir,
+                                {"euler": (0.0, 1.3), "vl2": (1.7, 2.3), "rk2": (1.5, 2.3)},
+                                [("vl2", 0.25), ("rk2", 0.25)])
+    if name == "conv_vortex":
+        return test_convergence(exe, name, workdir,
+                                {"euler": (0.0, 1.2), "vl2": (1.8, 2.3), "rk2": (1.8, 2.3)},
+                                [("vl2", 0.5), ("rk2", 0.5)])
     if name == "wb_harmonic_axes":  # runs two cases and compares them with each other
         return test_wb_harmonic_axes(exe, workdir)
     if name == "outflow_walls":  #runs four cases and compares them with each other
@@ -538,7 +595,7 @@ def test_case(exe, name, workdir):
     elif name == "sod_smr":
         check_sod(res, frames, gamma, l1_limit=8e-3)
         res.check("refined blocks present", len(frames[-1][1]), len(frames[-1][1]) > 8, "> 8 blocks")
-    elif name == "sod_amr":
+    elif name in ("sod_amr", "sod_amr_rk2"):
         check_sod(res, frames, gamma, l1_limit=8e-3)
         lv = max(b[0] for b in frames[-1][1])
         res.check("AMR refined (max level)", lv, lv >= 1, ">= 1")
@@ -566,7 +623,7 @@ def test_case(exe, name, workdir):
         check_contact(res, frames, gamma, "y", uniform_tol=1e-8)
     elif name == "contact_primitive":
         check_contact(res, frames, gamma, "x", uniform_tol=1e-12)
-    elif name in ("wb_isothermal", "wb_tjump"):
+    elif name in ("wb_isothermal", "wb_tjump", "wb_tjump_vl2", "wb_tjump_rk2"):
         atmosphere_rest(res, frames, gamma, 1e-12)
     elif name == "nowb_isothermal":  # the counter-check: without balancing, the equilibrium drifts
         _, _, Q = stitch(frames[-1])
@@ -595,13 +652,13 @@ def test_case(exe, name, workdir):
         e1 = Q1[..., 3] - 0.5*(Q1[..., 1]**2 + Q1[..., 2]**2)/Q1[..., 0]
         de = float(np.max(np.abs(e1/e0 - 1)))
         res.check("internal energy unchanged", de, de < 1e-12, "< 1e-12 (relative)")
-    elif name == "turb_solenoidal":
+    elif name in ("turb_solenoidal", "turb_solenoidal_vl2"):
         check_turb(res, frames, gamma, log, comp_range=(0.0, 0.25), mach_range=(0.3, 2.0))
     elif name == "turb_compressive":
         check_turb(res, frames, gamma, log, comp_range=(0.8, 1.0), mach_range=(0.05, 0.5))
     elif name == "sedov_uniform":
         check_sedov(res, frames, gamma, p_amb=1e-5, l1_limit=0.18)
-    elif name == "sedov_amr":
+    elif name in ("sedov_amr", "sedov_amr_vl2"):
         check_sedov(res, frames, gamma, p_amb=1e-5, l1_limit=0.11)
         lv = max(b[0] for b in frames[-1][1])
         res.check("AMR refined (max level)", lv, lv >= 2, ">= 2")
@@ -633,7 +690,9 @@ ALL = ["sod_uniform", "sod_smr", "sod_amr", "sod_amr_level2",
        "invalid_dirichlet", "invalid_problem", "invalid_number", "invalid_integrator",
        "turb_solenoidal", "turb_compressive", "invalid_turb_bc", "turb_drag",
        "wb_isothermal", "wb_tjump", "nowb_isothermal", "wb_harmonic_axes", "wb_perturbation",
-       "invalid_wb_no_potential", "invalid_hydrostatic_no_potential"]
+       "invalid_wb_no_potential", "invalid_hydrostatic_no_potential",
+       "conv_advect", "conv_vortex", "wb_tjump_vl2", "wb_tjump_rk2", "sedov_amr_vl2", "sod_amr_rk2",
+       "turb_solenoidal_vl2"]
 
 def main():
     ap = argparse.ArgumentParser(description="Szuchydro test suite")
@@ -643,11 +702,14 @@ def main():
     ap.add_argument("--save-ref", metavar="DIR", help="store final-frame hashes (bit-for-bit mode)")
     ap.add_argument("--compare-ref", metavar="DIR", 
                     help="compare final frames to the references in DIR")
+    ap.add_argument("--extra", action="append", default=[], metavar="LINE",
+                    help="append this line to every test case, e.g. --extra 'integrator vl2' (repeatable)")
     ap.add_argument("--tol", type=float, default=0.0,
                     help=("with --compare-ref: accept max relative"  
                     "differences up to this (default 0 = bit-for-bit)"))
 
     a = ap.parse_args()
+    EXTRA.extend(a.extra)
     exe = os.path.abspath(a.exe)
     if not os.path.isfile(exe):
         sys.exit(f"executable not found: {exe}")

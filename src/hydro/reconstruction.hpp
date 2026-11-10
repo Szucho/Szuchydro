@@ -140,3 +140,27 @@ void reconstruct_face_wb(const Vec4& m2, const Vec4& m1, const Vec4& c0, const V
   l = prim_to_cons(a, gamma);
   r = prim_to_cons(b, gamma);
 }
+
+
+//first-order piecewise-constant face states, for the predictor stage of VL2: 
+//the left state is cell m1, the right state cell c0.
+KOKKOS_INLINE_FUNCTION
+void reconstruct_face_first_order(const Vec4& m1, const Vec4& c0, Vec4& l, Vec4& r){
+  l = m1;
+  r = c0;
+}
+
+//first-order well-balanced face states: rho, u, v constant per cell; 
+//the pressure is the hydrostatic extrapolation p0 to the face (no perturbation slope).
+//Plain constant states would put the hydrostatic pressure jump on every face
+//with p0 both sides agree in a discrete equilibrium,
+//so the predictor stage of VL2 stays balanced to machine precision like the corrector.
+KOKKOS_INLINE_FUNCTION
+void reconstruct_face_wb_first_order(const Vec4& m1, const Vec4& c0, Real phi_m1, Real phi_c0,
+                                     Real gamma, Vec4& l, Vec4& r){
+  Vec4 a = cons_to_prim(m1, gamma), b = cons_to_prim(c0, gamma);
+  a[IP] = a[IP] - 0.5*a[IDN]*(phi_c0 - phi_m1);
+  b[IP] = b[IP] + 0.5*b[IDN]*(phi_c0 - phi_m1);
+  l = prim_to_cons(a, gamma);
+  r = prim_to_cons(b, gamma);
+}

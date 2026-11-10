@@ -33,8 +33,15 @@ FaceFluxes AllocateFaceFluxes(const MeshInputs& in);
 //phi/well_balanced:
 //with an external potential and well_balanced = true the face states come from
 //the hydrostatic reconstruction (reconstruct_face_wb), otherwise phi is not used here
+//first_order: piecewise-constant face states (the predictor stage of VL2)
 void ComputeFluxes(Mesh& mesh, const View4D& U, Real gamma, const ReconOptions& recon,
-                   const FaceFluxes& F, const View3D& phi = View3D(), bool well_balanced = false);
+                   const FaceFluxes& F, const View3D& phi = View3D(),
+                   bool well_balanced = false, bool first_order = false);
 
 void ApplyFluxDivergence(Mesh& mesh, const View4D& U_from, const View4D& U_to,
                          const FaceFluxes& F, Real dt);
+
+//U_to = ca*U_a + cb*(U_b - dt div F), for multi-stage integrators (RK2: ca = cb = 1/2)
+//U_to may be the same view as U_a: every cell only reads its own values.
+void CombineFluxDivergence(Mesh& mesh, const View4D& U_a, const View4D& U_b, const View4D& U_to,
+                           const FaceFluxes& F, Real dt, Real ca, Real cb);

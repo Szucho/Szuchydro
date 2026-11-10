@@ -1,2 +1,0 @@
-/usr/bin/ar qc libszuchydro_mesh.a CMakeFiles/szuchydro_mesh.dir/mesh.cpp.o CMakeFiles/szuchydro_mesh.dir/meshtree.cpp.o
-/usr/bin/ranlib libszuchydro_mesh.a

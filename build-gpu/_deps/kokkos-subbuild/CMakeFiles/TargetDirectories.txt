@@ -1,3 +1,0 @@
-/home/szuch/Szuchydro/build-gpu/_deps/kokkos-subbuild/CMakeFiles/kokkos-populate.dir
-/home/szuch/Szuchydro/build-gpu/_deps/kokkos-subbuild/CMakeFiles/edit_cache.dir
-/home/szuch/Szuchydro/build-gpu/_deps/kokkos-subbuild/CMakeFiles/rebuild_cache.dir

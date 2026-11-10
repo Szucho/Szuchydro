@@ -1,1 +1,0 @@
-include(/home/szuch/Szuchydro/build-gpu/_deps/kokkos-build/KokkosTargets.cmake)
