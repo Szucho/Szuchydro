@@ -54,8 +54,8 @@ struct SimParams {
   Real amr_derefine_tol = 0.01; //derefine if it stays below this everywhere
   //reconstruction: limiter (minmod, vanleer, superbee, mc) and variables (conserved, primitive)
   ReconOptions recon;
-  //time integrator (euler; TODO: vl2 SOON), checked when integrator is created
-  std::string integrator = "euler";
+  //time integrator (euler, vl2, rk2), checked when integrator is created
+  std::string integrator = "vl2";
   //external potential field from problems potential hook 
   //well balanced treatment on/off, by default: off
   bool well_balanced;
