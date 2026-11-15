@@ -36,7 +36,8 @@ FaceFluxes AllocateFaceFluxes(const MeshInputs& in);
 //first_order: piecewise-constant face states (the predictor stage of VL2)
 void ComputeFluxes(Mesh& mesh, const View4D& U, Real gamma, const ReconOptions& recon,
                    const FaceFluxes& F, const View3D& phi = View3D(),
-                   bool well_balanced = false, bool first_order = false);
+                   bool well_balanced = false, bool first_order = false,
+                   const WBEquilibrium& eq = WBEquilibrium());
 
 void ApplyFluxDivergence(Mesh& mesh, const View4D& U_from, const View4D& U_to,
                          const FaceFluxes& F, Real dt);

@@ -4,6 +4,7 @@
 #include "core/hydro_config.hpp"
 #include "mesh/mesh.hpp"
 #include "bvals/bvals.hpp"
+#include "hydro/reconstruction.hpp"
 
 /*
  External potential phi(x, y): any conservative force field entering the Euler (or Navier-Stokes)
@@ -39,8 +40,21 @@ private:
 //centred differences grad(phi)_i = (phi_{i+1} - phi_{i-1})/(2 dx)
 void AddPotentialSource(Mesh& mesh, const View3D& phi, const View4D& U_stage, const View4D& U_out, Real dt);
 
+//the same for the barotropic well-balanced families: 
+//the momentum source is the difference of the cell's own extrapolated face pressures,
+//(p0(face+) - p0(face-))/dx, with p0 = wb_p0 (isothermal or polytropic)
+//this cancels the flux difference exactly
+//the energy source is the same as above
+void AddPotentialSourceBarotropic(Mesh& mesh, const View3D& phi, const View4D& U_stage, const View4D& U_out,
+                                  Real dt, Real gamma, const WBEquilibrium& eq);
+
+
 //ghost cells of Hydrostatic walls (after the regular BC has mirrored them like Closed walls):
 //density from the adjacent interior cell, pressure extrapolated with phi so that the discrete
 //equilibrium holds across the wall, p_ghost = p_in - rho_in (phi_ghost - phi_in)
 //the mirrored (reflected) velocity is kept
-void ApplyHydrostaticGhosts(Mesh& mesh, const View3D& phi, const GridBC& bc, Real gamma);
+//new eq: for the barotropic families, rho and p of the interior cell's own equilibrium are
+//extrapolated into the ghost cell (wb_rho0, wb_p0), so the ghost belongs to the same equilibrium
+//for linear (default) the M3 rule above is used unchanged
+void ApplyHydrostaticGhosts(Mesh& mesh, const View3D& phi, const GridBC& bc, Real gamma,
+                            const WBEquilibrium& eq = WBEquilibrium());

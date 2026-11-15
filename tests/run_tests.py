@@ -15,6 +15,11 @@ Physics problems checks:
     turb_drag           exact: uniform flow without forcing decays as exp(-turb_drag t), internal energy unchanged
     wb_isothermal       well-balanced isothermal atmosphere: at rest to machine precision
     wb_tjump            the same with a tenfold temperature jump
+    wb_pointmass_iso/_poly   barotropic well-balancing in a 2D potential (point mass): at rest to machine precision
+    wb_pointmass_linear  the same state with the linear variant must drift (counter-check)
+    wb_pointmass_integrators  the isothermal case with euler and rk2
+    wb_pointmass_pert   a 1e-6 pulse in the 2D atmosphere: wave visible, far field at round-off
+    invalid_wb_equilibrium  unknown wb_equilibrium must stop with 'Parameter error'
     nowb_isothermal     well_balanced 0: must drift (the switch matters)
     wb_harmonic_axes    harmonic potential along y and x: at rest, x == transposed y (all 4 walls)
     wb_perturbation     a 1e-6 pressure pulse propagates; the far field stays at round-off
@@ -465,6 +470,25 @@ def test_convergence(exe, name, workdir, limits, ratio):
         res.check(f"L1 error {integ} / euler at N=64", q, q < r, f"< {r:g}")
     return res
 
+def test_wb_pointmass_integrators(exe, workdir):
+    """The isothermal point-mass atmosphere with euler and rk2 (vl2 is the default, covered by
+    wb_pointmass_iso): every integrator must keep the barotropic equilibrium at rest."""
+    name = "wb_pointmass_integrators"
+    res = Result(name)
+    res.runtime, res.outdir = 0.0, None
+    for integ in ["euler", "rk2"]:
+        code, log, dt, outdir = run_variant(exe, name, [f"integrator {integ}"], workdir)
+        res.runtime += dt
+        res.check(f"exit code ({integ})", code, code == 0, "= 0")
+        if code != 0:
+            res.log_tail = "\n".join(log.replace("\r", "\n").splitlines()[-15:])
+            return res
+        frames = read_frames(os.path.join(outdir, "grid.bin"))
+        x, y, Q = stitch(frames[-1])
+        rho, u, v, p = primitives(Q, 1.4)
+        mach = float(np.max(np.hypot(u, v)/np.sqrt(1.4*p/rho)))
+        res.check(f"max |v|/cs ({integ})", mach, mach < 1e-12, "< 1e-12")
+    return res
 
 
 def test_outflow_walls(exe, workdir):
@@ -548,6 +572,8 @@ def test_case(exe, name, workdir):
         return test_convergence(exe, name, workdir,
                                 {"euler": (0.0, 1.2), "vl2": (1.8, 2.3), "rk2": (1.8, 2.3)},
                                 [("vl2", 0.5), ("rk2", 0.5)])
+    if name == "wb_pointmass_integrators":  # runs its case with euler and rk2
+        return test_wb_pointmass_integrators(exe, workdir)
     if name == "wb_harmonic_axes":  # runs two cases and compares them with each other
         return test_wb_harmonic_axes(exe, workdir)
     if name == "outflow_walls":  #runs four cases and compares them with each other
@@ -630,6 +656,22 @@ def test_case(exe, name, workdir):
         check_contact(res, frames, gamma, "x", uniform_tol=1e-12)
     elif name in ("wb_isothermal", "wb_tjump", "wb_tjump_vl2", "wb_tjump_rk2"):
         atmosphere_rest(res, frames, gamma, 1e-12)
+    elif name in ("wb_pointmass_iso", "wb_pointmass_poly"):
+        atmosphere_rest(res, frames, gamma, 1e-12)
+    elif name == "wb_pointmass_linear":  #counter-check: linear is only second order in a 2D potential
+        _, _, Qf = stitch(frames[-1])
+        rho_, u_, v_, p_ = primitives(Qf, gamma)
+        mach = float(np.max(np.hypot(u_, v_)/np.sqrt(gamma*p_/rho_)))
+        res.check("max |v|/cs (must drift)", mach, mach > 1e-5, "> 1e-5")
+    elif name == "wb_pointmass_pert":
+        xx, yy, Qf = stitch(frames[-1])
+        rho_, u_, v_, p_ = primitives(Qf, gamma)
+        X, Y = np.meshgrid(xx, yy, indexing="ij")
+        r = np.hypot(X - 0.8, Y)
+        mach = np.hypot(u_, v_)/np.sqrt(gamma*p_/rho_)
+        wave, far = float(mach[r < 0.6].max()), float(mach[r > 2.0].max())
+        res.check("wave: max |v|/cs for r < 0.6", wave, 1e-8 < wave < 1e-6, "in (1e-8, 1e-6)")
+        res.check("far field: max |v|/cs for r > 2.0", far, far < 1e-12, "< 1e-12")
     elif name == "nowb_isothermal":  # the counter-check: without balancing, the equilibrium drifts
         _, _, Q = stitch(frames[-1])
         rho, u, v, p = primitives(Q, gamma)
@@ -697,7 +739,8 @@ ALL = ["sod_uniform", "sod_smr", "sod_amr", "sod_amr_level2",
        "wb_isothermal", "wb_tjump", "nowb_isothermal", "wb_harmonic_axes", "wb_perturbation",
        "invalid_wb_no_potential", "invalid_hydrostatic_no_potential",
        "conv_advect", "conv_vortex", "wb_tjump_vl2", "wb_tjump_rk2", "sedov_amr_vl2", "sod_amr_rk2",
-       "turb_solenoidal_vl2"]
+       "turb_solenoidal_vl2", "wb_pointmass_iso", "wb_pointmass_poly", "wb_pointmass_linear",
+       "wb_pointmass_integrators", "wb_pointmass_pert", "invalid_wb_equilibrium"]
 
 def main():
     ap = argparse.ArgumentParser(description="Szuchydro test suite")

@@ -59,6 +59,11 @@ struct SimParams {
   //external potential field from problems potential hook 
   //well balanced treatment on/off, by default: off
   bool well_balanced;
+  //equilibrium family of the well-balanced scheme:
+  //wb_equilibrium linear|isothermal|polytropic,
+  //wb_polytropic_gamma (default gamma);
+  //read only with well_balanced 1
+  WBEquilibrium wb_eq;
   //Dirichlet walls: fixed primitive state (rho, u, v, p), only used if that wall is Dirichlet
   struct WallState { Real rho = 0.0, u = 0.0, v = 0.0, p = 0.0; };
   WallState dir_left, dir_right, dir_bottom, dir_top;

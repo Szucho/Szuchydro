@@ -13,6 +13,7 @@ static const ProblemEntry problems[] = {
   {"atmosphere", ProblemAtmosphere, "stratified layer in hydro equilibrium in external potential (atm_*keys)"},
   {"advect",  ProblemAdvect,  "advected density sine wave (convergence test, adv_* keys)"},
   {"vortex",  ProblemVortex,  "isentropic vortex [Yeet et al. 1999] (convergence test, vortex_* keys)"},
+  {"pointmass", ProblemPointmass, "barotropic atmosphere around a softened point mass (2D potential; pm_* keys)"},
 };
 
 //here we find the problem we wish to solve

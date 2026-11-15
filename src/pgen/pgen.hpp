@@ -71,5 +71,6 @@ void ProblemTurb   (Mesh& mesh, const SimParams& par, ProblemHooks& hooks); //tu
 void ProblemAtmosphere (Mesh& mesh, const SimParams& par, ProblemHooks& hooks); //atmosphere.cpp
 void ProblemAdvect (Mesh& mesh, const SimParams& par, ProblemHooks& hooks); //advect.cpp
 void ProblemVortex (Mesh& mesh, const SimParams& par, ProblemHooks& hooks); //vortex.cpp
+void ProblemPointmass(Mesh& mesh, const SimParams& par, ProblemHooks& hooks); //pointmass.cpp
 
 //list extra problems below this comment

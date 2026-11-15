@@ -1,4 +1,5 @@
 #include "solver/time_integrator.hpp"
+#include "hydro/reconstruction.hpp"
 #include "solver/potential.hpp"
 #include <stdexcept>
 
@@ -17,7 +18,13 @@ void TimeIntegrator::step(Mesh& mesh, Real dt, Real gamma, const ReconOptions& r
 
   //the source terms of L(U) evaluated from U_stage, added to U_out with time step h
   auto add_sources = [&](const View4D& U_stage, const View4D& U_out, Real h){
-    if(has_phi) AddPotentialSource(mesh, phi_, U_stage, U_out, h); //the external potential
+    if(has_phi){ //external potential
+      if(well_balanced_ && eq_.type != WB_LINEAR){
+        AddPotentialSourceBarotropic(mesh, phi_, U_stage, U_out, h, gamma, eq_);
+      } else {
+        AddPotentialSource(mesh, phi_, U_stage, U_out, h);
+      }
+    }
     if(smooth_sources) smooth_sources(mesh, U_stage, U_out, h);    //easy addition of well behaved source terms
   };
 
@@ -25,7 +32,7 @@ void TimeIntegrator::step(Mesh& mesh, Real dt, Real gamma, const ReconOptions& r
     //forward Euler: one stage
     View4D U    = mesh.get_data_view();
     View4D Unew = mesh.get_data_next_view();
-    ComputeFluxes(mesh, U, gamma, recon, F_, phi_, well_balanced_);
+    ComputeFluxes(mesh, U, gamma, recon, F_, phi_, well_balanced_, false, eq_);
     ApplyFluxDivergence(mesh, U, Unew, F_, dt);
     add_sources(U, Unew, dt);
     mesh.swap_data_views();
@@ -36,7 +43,7 @@ void TimeIntegrator::step(Mesh& mesh, Real dt, Real gamma, const ReconOptions& r
     //predictor: U* = U^n + dt/2 L1(U^n), first-order face states, into the second array
     {
       View4D Un = mesh.get_data_view(), Us = mesh.get_data_next_view();
-      ComputeFluxes(mesh, Un, gamma, recon, F_, phi_, well_balanced_, /*first_order=*/true);
+      ComputeFluxes(mesh, Un, gamma, recon, F_, phi_, well_balanced_, /*first_order=*/true, eq_);
       ApplyFluxDivergence(mesh, Un, Us, F_, 0.5*dt);
       add_sources(Un, Us, 0.5*dt);
     }
@@ -45,7 +52,7 @@ void TimeIntegrator::step(Mesh& mesh, Real dt, Real gamma, const ReconOptions& r
     //corrector: U^{n+1} = U^n + dt L(U*), written over U^n (every cell only reads its own value)
     {
       View4D Us = mesh.get_data_view(), Un = mesh.get_data_next_view();
-      ComputeFluxes(mesh, Us, gamma, recon, F_, phi_, well_balanced_); //also fills the flux register
+      ComputeFluxes(mesh, Us, gamma, recon, F_, phi_, well_balanced_, false, eq_); //also fills the flux register
       ApplyFluxDivergence(mesh, Un, Un, F_, dt);
       add_sources(Us, Un, dt);
     }
@@ -61,7 +68,7 @@ void TimeIntegrator::step(Mesh& mesh, Real dt, Real gamma, const ReconOptions& r
   //stage 1: U1 = U^n + dt L(U^n)
   {
     View4D Un = mesh.get_data_view(), U1 = mesh.get_data_next_view();
-    ComputeFluxes(mesh, Un, gamma, recon, F_, phi_, well_balanced_);
+    ComputeFluxes(mesh, Un, gamma, recon, F_, phi_, well_balanced_, false, eq_);
     ApplyFluxDivergence(mesh, Un, U1, F_, dt);
     add_sources(Un, U1, dt);
   }
@@ -71,7 +78,7 @@ void TimeIntegrator::step(Mesh& mesh, Real dt, Real gamma, const ReconOptions& r
   //stage 2: U^{n+1} = 1/2 U^n + 1/2 (U1 + dt L(U1)), written over U^n
   {
     View4D U1 = mesh.get_data_view(), Un = mesh.get_data_next_view();
-    ComputeFluxes(mesh, U1, gamma, recon, F_, phi_, well_balanced_);
+    ComputeFluxes(mesh, U1, gamma, recon, F_, phi_, well_balanced_, false, eq_);
     CombineFluxDivergence(mesh, Un, U1, Un, F_, dt, 0.5, 0.5);
     add_sources(U1, Un, 0.5*dt);
   }

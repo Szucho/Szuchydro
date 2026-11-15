@@ -87,6 +87,18 @@ SimParams readParams(const std::string& filename){ //reads in params.txt
   else throw std::runtime_error("Parameter error: unknown limiter '" + lim + "' (minmod, vanleer, superbee, mc)");
   p.integrator = has("integrator") ? get("integrator") : "vl2";
   p.well_balanced = has("well_balanced") ? (geti("well_balanced") != 0) : false;
+  if(p.well_balanced){ //read only here: without well_balanced these keys are reported as unused
+    const std::string eqn = has("wb_equilibrium") ? get("wb_equilibrium") : "linear";
+    if     (eqn == "linear")     p.wb_eq.type = WB_LINEAR;
+    else if(eqn == "isothermal") p.wb_eq.type = WB_ISOTHERMAL;
+    else if(eqn == "polytropic"){
+      p.wb_eq.type = WB_POLYTROPIC;
+      p.wb_eq.Gamma = has("wb_polytropic_gamma") ? getd("wb_polytropic_gamma") : p.gamma;
+      if(p.wb_eq.Gamma <= 1.0) throw std::runtime_error("Parameter error: wb_polytropic_gamma must be > 1");
+    }
+    else throw std::runtime_error("Parameter error: unknown wb_equilibrium '" + eqn +
+                                  "' (linear, isothermal, polytropic)");
+  }
   const std::string rec = has("reconstruct") ? get("reconstruct") : "conserved";
   if     (rec == "conserved") p.recon.primitive = false;
   else if(rec == "primitive") p.recon.primitive = true;

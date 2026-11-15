@@ -40,6 +40,7 @@ class TimeIntegrator{
     FaceFluxes F_;
     View3D phi_; //defaults to empty = no external potential field
     bool well_balanced_ = false;
+    WBEquilibrium eq_; //equilibrium family of the well-balanced scheme
     View4D flux_reg_saved_; //rk2: block-edge fluxes of stage 1 
   
   public:
@@ -58,5 +59,7 @@ class TimeIntegrator{
     //external potential (tabulated by PotentialField):
     //its source is part of L(U), evaluated from the stage like the fluxes.
     //well balanced selects the hydrostatic reconstruction
-    void set_potential(const View3D& phi, bool well_balanced){ phi_ = phi; well_balanced_ = well_balanced; }
+    void set_potential(const View3D& phi, bool well_balanced, const WBEquilibrium& eq = WBEquilibrium()){
+      phi_ = phi; well_balanced_ = well_balanced; eq_ = eq;
+    }
 };

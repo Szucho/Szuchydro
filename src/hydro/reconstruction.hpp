@@ -164,3 +164,91 @@ void reconstruct_face_wb_first_order(const Vec4& m1, const Vec4& c0, Real phi_m1
   l = prim_to_cons(a, gamma);
   r = prim_to_cons(b, gamma);
 }
+
+
+//in a 2D potential a static equilibrium exists only if p and rho are functions of phi alone 
+//(otherwise the baroclinic term grad p x grad rho drives vorticity) 
+//For two closed-form families the hydrostatic extrapolation from a cell's OWN state is exact (Kaeppeli & Mishra 2016):
+//  isothermal:  p0 = p_i exp(-dphi/T_i),                  T_i = p_i/rho_i
+//  polytropic:  p0 = p_i (1 - dphi/h_i)^(G/(G-1)),        h_i = G/(G-1) p_i/rho_i  (p = K rho^G)
+//with dphi = phi(x) - phi_i. A state of that family gives identical face values from both sides,
+//whatever the potential. "linear" is the M3 scheme (exact for discrete equilibria in potentials
+//that vary along one axis, any temperature profile)
+//its code paths are unchanged
+enum WBType : int { WB_LINEAR = 0, WB_ISOTHERMAL = 1, WB_POLYTROPIC = 2 };
+
+struct WBEquilibrium{
+  int  type  = WB_LINEAR;
+  Real Gamma = 1.4; //polytropic index G (p = K rho^G); only used by WB_POLYTROPIC
+};
+
+//pressure of the cell's own equilibrium, extrapolated by dphi (p, rho: the cell's state)
+KOKKOS_INLINE_FUNCTION
+Real wb_p0(const WBEquilibrium& e, Real p, Real rho, Real dphi){
+  if(e.type == WB_ISOTHERMAL) return p*Kokkos::exp(-dphi*rho/p);
+  if(e.type == WB_POLYTROPIC){
+    const Real f = 1.0 - dphi*(e.Gamma - 1.0)*rho/(e.Gamma*p);
+    return (f > 0.0) ? p*Kokkos::pow(f, e.Gamma/(e.Gamma - 1.0)) : 0.0; //f <= 0: beyond the atmosphere's edge
+  }
+  return p - rho*dphi; //linear
+}
+
+//density of the cell's own equilibrium, extrapolated by dphi (used for Hydrostatic ghost cells)
+KOKKOS_INLINE_FUNCTION
+Real wb_rho0(const WBEquilibrium& e, Real p, Real rho, Real dphi){
+  if(e.type == WB_ISOTHERMAL) return rho*Kokkos::exp(-dphi*rho/p);
+  if(e.type == WB_POLYTROPIC){
+    const Real f = 1.0 - dphi*(e.Gamma - 1.0)*rho/(e.Gamma*p);
+    return (f > 0.0) ? rho*Kokkos::pow(f, 1.0/(e.Gamma - 1.0)) : 0.0;
+  }
+  return rho; //linear: the M3 ghost-cell rule (constant density)
+}
+
+//well-balanced face states for the barotropic families: like reconstruct_face_wb, but every
+//hydrostatic extrapolation (face value and the neighbours' perturbations) uses the cell's own
+//equilibrium wb_p0, phi at the face = mean of the two cells
+KOKKOS_INLINE_FUNCTION
+void reconstruct_face_wb_baro(const Vec4& m2, const Vec4& m1, const Vec4& c0, const Vec4& p1,
+                              Real phi_m2, Real phi_m1, Real phi_c0, Real phi_p1,
+                              Real dk, Real gamma, int limiter, const WBEquilibrium& e, Vec4& l, Vec4& r){
+  Vec4 wm2 = cons_to_prim(m2, gamma), wm1 = cons_to_prim(m1, gamma);
+  Vec4 w0  = cons_to_prim(c0, gamma), wp1 = cons_to_prim(p1, gamma);
+  Vec4 s_m1 = limited_slope(wm2, wm1, w0, dk, limiter);
+  Vec4 s_0  = limited_slope(wm1, w0, wp1, dk, limiter);
+  Vec4 a, b;
+  for(size_t k = 0; k < NVAR; ++k){
+    a[k] = wm1[k] + 0.5*dk*s_m1[k];
+    b[k] = w0[k]  - 0.5*dk*s_0[k];
+  }
+  const Real phi_f = 0.5*(phi_m1 + phi_c0);
+  {//left state: cell m1
+    const Real p = wm1[IP], rho = wm1[IDN];
+    const Real q_m = wm2[IP] - wb_p0(e, p, rho, phi_m2 - phi_m1);
+    const Real q_p = w0[IP]  - wb_p0(e, p, rho, phi_c0 - phi_m1);
+    const Vec4 sl = limited_slope(Vec4{q_m, 0.0, 0.0, 0.0}, Vec4{0.0, 0.0, 0.0, 0.0},
+                                  Vec4{q_p, 0.0, 0.0, 0.0}, dk, limiter);
+    a[IP] = wb_p0(e, p, rho, phi_f - phi_m1) + 0.5*dk*sl[0];
+  }
+  {//right state: cell c0
+    const Real p = w0[IP], rho = w0[IDN];
+    const Real q_m = wm1[IP] - wb_p0(e, p, rho, phi_m1 - phi_c0);
+    const Real q_p = wp1[IP] - wb_p0(e, p, rho, phi_p1 - phi_c0);
+    const Vec4 sl = limited_slope(Vec4{q_m, 0.0, 0.0, 0.0}, Vec4{0.0, 0.0, 0.0, 0.0},
+                                  Vec4{q_p, 0.0, 0.0, 0.0}, dk, limiter);
+    b[IP] = wb_p0(e, p, rho, phi_f - phi_c0) - 0.5*dk*sl[0];
+  }
+  l = prim_to_cons(a, gamma);
+  r = prim_to_cons(b, gamma);
+}
+
+//first-order version (VL2 predictor): rho, u, v constant, pressure = own equilibrium at the face
+KOKKOS_INLINE_FUNCTION
+void reconstruct_face_wb_baro_first_order(const Vec4& m1, const Vec4& c0, Real phi_m1, Real phi_c0,
+                                          Real gamma, const WBEquilibrium& e, Vec4& l, Vec4& r){
+  Vec4 a = cons_to_prim(m1, gamma), b = cons_to_prim(c0, gamma);
+  const Real phi_f = 0.5*(phi_m1 + phi_c0);
+  a[IP] = wb_p0(e, a[IP], a[IDN], phi_f - phi_m1);
+  b[IP] = wb_p0(e, b[IP], b[IDN], phi_f - phi_c0);
+  l = prim_to_cons(a, gamma);
+  r = prim_to_cons(b, gamma);
+}

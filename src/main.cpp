@@ -199,13 +199,13 @@ int main(int argc, char* argv[]){
     PotentialField potential;
     if(has_potential){
       potential.fill(mesh, hooks.potential);
-      integrator.set_potential(potential.view(), par.well_balanced);
+      integrator.set_potential(potential.view(), par.well_balanced, par.wb_eq);
     }
 
 
     auto apply_bcs = [&](){
       ApplyPhysicalBoundaryConditions(mesh, bc);
-      if(hydrostatic_walls) ApplyHydrostaticGhosts(mesh, potential.view(), bc, par.gamma);
+      if(hydrostatic_walls) ApplyHydrostaticGhosts(mesh, potential.view(), bc, par.gamma, par.wb_eq);
       if(hooks.boundaries) hooks.boundaries(mesh);
     };
 
@@ -343,7 +343,7 @@ int main(int argc, char* argv[]){
           //(UpdateDynamicMesh already rebuilt the active block slots and neighbor maps)
           if(has_potential){ //here we have a new block layout -> tabulate potential again
             potential.fill(mesh, hooks.potential);
-            integrator.set_potential(potential.view(), par.well_balanced);
+            integrator.set_potential(potential.view(), par.well_balanced, par.wb_eq);
           }
 
           //map old states to new blocks (Direct, Prolongation, Restriction)
