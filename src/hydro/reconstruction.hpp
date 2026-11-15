@@ -179,7 +179,9 @@ enum WBType : int { WB_LINEAR = 0, WB_ISOTHERMAL = 1, WB_POLYTROPIC = 2 };
 
 struct WBEquilibrium{
   int  type  = WB_LINEAR;
-  Real Gamma = 1.4; //polytropic index G (p = K rho^G); only used by WB_POLYTROPIC
+  Real Gamma = 0.0; //polytropic index G (p = K rho^G); only used by WB_POLYTROPIC
+                    //always set from wb_polytropic_gamma or the gas gamma if that key is not given
+                    //I hardcoded this for some reason and such it has to remain in the code otherwise it breaks
 };
 
 //pressure of the cell's own equilibrium, extrapolated by dphi (p, rho: the cell's state)

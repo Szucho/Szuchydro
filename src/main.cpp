@@ -21,6 +21,7 @@
 #include "pgen/pgen.hpp"
 #include "solver/time_integrator.hpp"
 #include "solver/potential.hpp"
+#include "solver/reference.hpp"
 
 //CFL time step calculation (GPU/CPU parallel reduction)
 Real compute_cfl_dt(Mesh& mesh, Real gamma, Real cfl_max){
@@ -174,6 +175,22 @@ int main(int argc, char* argv[]){
     ProblemHooks hooks;
     problem.init(mesh, par, hooks);
 
+    //well-balancing across static refinement levels (src/solver/reference.*):
+    //the initial state is the reference equilibrium of every level,
+    //and ghost exchanges run on the deviation from it
+    ReferenceEquilibrium reference;
+    const bool use_reference = par.well_balanced && !par.use_amr && !par.refine_regions.empty();
+    if(use_reference) reference.capture(mesh, par.gamma);
+    auto exchange_ghosts = [&](){
+      if(use_reference){
+        reference.to_deviation(mesh, par.gamma);
+        ExchangeGhostZones(mesh);
+        reference.from_deviation(mesh, par.gamma);
+      }else{
+        ExchangeGhostZones(mesh);
+      }
+    };
+
     //keys in the parameter file that nothing has read: almost always a typo
     for(const auto& key : par.store.unused())
       std::cerr << "Warning: parameter '" << key << "' is not used by this setup (typo?)\n";
@@ -192,10 +209,13 @@ int main(int argc, char* argv[]){
     if(hydrostatic_walls && !has_potential)
       throw std::runtime_error("Parameter error: Hydrostatic walls need a potential, but gas_profile '" +
                                par.gas_profile + "' defines none (hooks.potential)");
-    if(par.well_balanced && (par.use_amr || !par.refine_regions.empty()))
-      std::cerr << "Warning: well_balanced with mesh refinement (use_amr 1 or refine regions): the balance is\n"
-                   "         exact only within each refinement level; level boundaries create spurious flows.\n"
-                   "         For exact equilibria use a uniform grid (use_amr 0, no refine lines).\n";
+    //static refinement is well-balanced through the reference equilibrium (below), AMR is not yet
+    //(blocks created by a regrid have no reference)
+    if(par.well_balanced && par.use_amr)
+      std::cerr << "Warning: well_balanced with AMR (use_amr 1): the balance is exact only within each\n"
+                   "         refinement level; level boundaries created by AMR cause spurious flows.\n"
+                   "         Use use_amr 0 (static refine regions are fine).\n";
+
     PotentialField potential;
     if(has_potential){
       potential.fill(mesh, hooks.potential);
@@ -255,7 +275,7 @@ int main(int argc, char* argv[]){
       return all_cells_quiet;
     };
 
-    ExchangeGhostZones(mesh);
+    exchange_ghosts();
     apply_bcs();
     auto data_check = mesh.get_data_view();
     int n_act = mesh.num_active_blocks();
@@ -351,7 +371,7 @@ int main(int argc, char* argv[]){
 
           //populating ghost zones and boundaries for the new mesh layout immediately!!!
           //OTHERWISE UNSTABLE, DO NOT REMOVE
-          ExchangeGhostZones(mesh);
+          exchange_ghosts();
           apply_bcs();
         }
 
@@ -374,11 +394,11 @@ int main(int argc, char* argv[]){
         //this one, 170 degrees 40 minutes
         if(hooks.begin_step) hooks.begin_step(mesh, dt);
         integrator.step(mesh, dt, gamma, par.recon, hooks.smooth_sources,
-                        [&](){ ExchangeGhostZones(mesh), apply_bcs(); }); //between stages
+                        [&](){ exchange_ghosts(), apply_bcs(); }); //between stages
         //you work hard, you recover harder
         ApplyReflux(mesh, dt);
         if(hooks.source_terms) hooks.source_terms(mesh, dt);
-        ExchangeGhostZones(mesh);
+        exchange_ghosts();
         apply_bcs();
 
         //flux_view still holds this step's face fluxes (reflux and ghost exchange don't touch it)

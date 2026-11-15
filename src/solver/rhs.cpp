@@ -61,10 +61,29 @@ void ComputeFluxes(Mesh& mesh, const View4D& U, Real gamma, const ReconOptions& 
       }
       const Vec4 flux = FluxhllcX(l, r, gamma); //flux vals
       for(size_t k = 0; k < NVAR; ++k) fx(b, f, jj, k) = flux[k];
-      if(f == 0)
-        for(size_t k = 0; k < NVAR; ++k) flux_face(b, (int)FaceDir::XM, jj, k) = flux[k];
-      if(f == nx1)
-        for(size_t k = 0; k < NVAR; ++k) flux_face(b, (int)FaceDir::XP, jj, k) = flux[k];
+      //flux register (refluxing at refinement boundaries):
+      //with well-balancing it stores the momentum
+      //flux MINUS this block's own hydrostatic face pressure p0,
+      //so refluxing corrects only the dynamic part;
+      //each level balances its hydrostatic part itself.
+      //Mass and energy fluxes are unchanged, so both stay exactly conserved.
+      if(f == 0){ //this block's cell is c0 (right of the face)
+        Real hyd = 0.0;
+        if(wb){
+          const Vec4 w = cons_to_prim(c0, gamma);
+          hyd = wb_p0(e, w[IP], w[IDN], 0.5*(phi(b, i-1, j) + phi(b, i, j)) - phi(b, i, j));
+        }
+        for(size_t k = 0; k < NVAR; ++k) flux_face(b, (int)FaceDir::XM, jj, k) = flux[k] - (k == IM1 ? hyd : 0.0);
+      }
+      if(f == nx1){ //this block's cell is m1 (left of the face)
+        Real hyd = 0.0;
+        if(wb){
+          const Vec4 w = cons_to_prim(m1, gamma);
+          hyd = wb_p0(e, w[IP], w[IDN], 0.5*(phi(b, i-1, j) + phi(b, i, j)) - phi(b, i-1, j));
+        }
+        for(size_t k = 0; k < NVAR; ++k) flux_face(b, (int)FaceDir::XP, jj, k) = flux[k] - (k == IM1 ? hyd : 0.0);
+      }
+      
     }
   );
 
@@ -98,10 +117,28 @@ void ComputeFluxes(Mesh& mesh, const View4D& U, Real gamma, const ReconOptions& 
       }
       const Vec4 flux = FluxhllcY(l, r, gamma);
       for(size_t k = 0; k < NVAR; ++k) fy(b, ii, f, k) = flux[k];
-      if(f == 0)
-        for(size_t k = 0; k < NVAR; ++k) flux_face(b, (int)FaceDir::YM, ii, k) = flux[k];
-      if(f == nx2)
-        for(size_t k = 0; k < NVAR; ++k) flux_face(b, (int)FaceDir::YP, ii, k) = flux[k];
+      //flux register (refluxing at refinement boundaries):
+      //with well-balancing it stores the momentum
+      //flux MINUS this block's own hydrostatic face pressure p0, 
+      //so refluxing corrects only the dynamic part;
+      //each level balances its hydrostatic part itself.
+      //Mass and energy fluxes are unchanged, so both stay exactly conserved.
+      if(f == 0){ //this block's cell is c0 (right of the face)
+        Real hyd = 0.0;
+        if(wb){
+          const Vec4 w = cons_to_prim(c0, gamma);
+          hyd = wb_p0(e, w[IP], w[IDN], 0.5*(phi(b, i, j-1) + phi(b, i, j)) - phi(b, i, j));
+        }
+        for(size_t k = 0; k < NVAR; ++k) flux_face(b, (int)FaceDir::YM, ii, k) = flux[k] - (k == IM2 ? hyd : 0.0);
+      }
+      if(f == nx2){ //this block's cell is m1 (left of the face)
+        Real hyd = 0.0;
+        if(wb){
+          const Vec4 w = cons_to_prim(m1, gamma);
+          hyd = wb_p0(e, w[IP], w[IDN], 0.5*(phi(b, i, j-1) + phi(b, i, j)) - phi(b, i, j-1));
+        }
+        for(size_t k = 0; k < NVAR; ++k) flux_face(b, (int)FaceDir::YP, ii, k) = flux[k] - (k == IM2 ? hyd : 0.0);
+      }
     }
   );
 }
