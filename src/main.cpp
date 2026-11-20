@@ -179,7 +179,8 @@ int main(int argc, char* argv[]){
     //the initial state is the reference equilibrium of every level,
     //and ghost exchanges run on the deviation from it
     ReferenceEquilibrium reference;
-    const bool use_reference = par.well_balanced && !par.use_amr && !par.refine_regions.empty();
+    const bool use_reference = par.well_balanced && (par.use_amr || !par.refine_regions.empty());
+
     if(use_reference) reference.capture(mesh, par.gamma);
     auto exchange_ghosts = [&](){
       if(use_reference){
@@ -209,12 +210,6 @@ int main(int argc, char* argv[]){
     if(hydrostatic_walls && !has_potential)
       throw std::runtime_error("Parameter error: Hydrostatic walls need a potential, but gas_profile '" +
                                par.gas_profile + "' defines none (hooks.potential)");
-    //static refinement is well-balanced through the reference equilibrium (below), AMR is not yet
-    //(blocks created by a regrid have no reference)
-    if(par.well_balanced && par.use_amr)
-      std::cerr << "Warning: well_balanced with AMR (use_amr 1): the balance is exact only within each\n"
-                   "         refinement level; level boundaries created by AMR cause spurious flows.\n"
-                   "         Use use_amr 0 (static refine regions are fine).\n";
 
     PotentialField potential;
     if(has_potential){
@@ -273,6 +268,42 @@ int main(int argc, char* argv[]){
         Kokkos::LAnd<bool>(all_cells_quiet)
       );
       return all_cells_quiet;
+    };
+
+
+    //well balancing thru the reference equilibrium
+    //during regrid the blocks are keeping well balancing with an error of delta x^2/L
+    //whithout giving up the conserved vars
+    //first: do we have references? if not then use 0 as reference
+    View3D ref_rho = use_reference ? reference.rho() : View3D(), ref_p = use_reference ? reference.p() : View3D();
+    const Real gm1 = par.gamma - 1.0; //just to make life easier
+    //refinement criterion based on contrast (density or pressure contrast)
+    BlockCriterion contrast_refine = [=](const MeshBlock& block, const View4D& data, const View3D&){
+      const int b = block.slot_id;
+      bool refine = false;
+      Kokkos::parallel_reduce("ContrastRefineCheck",
+        Kokkos::MDRangePolicy<Kokkos::Rank<2>>({block.is, block.js}, {block.ie + 1, block.je + 1}),
+        KOKKOS_LAMBDA(int i, int j, bool& r){
+          const Real rho = data(b, i, j, IDN), mx = data(b, i, j, IM1), my = data(b, i, j, IM2);
+          const Real pr = gm1*(data(b, i, j, IEN) - 0.5*(mx*mx + my*my)/rho);
+          const Real c = Kokkos::fmax(Kokkos::fabs(rho/ref_rho(b, i, j) - 1.0), Kokkos::fabs(pr/ref_p(b, i, j) - 1.0));
+          if(c > refine_grad_threshold) r = true;
+        }, Kokkos::LOr<bool>(refine));
+      return refine;
+    };
+    //same as before but derefinement
+    BlockCriterion contrast_derefine = [=](const MeshBlock& block, const View4D& data, const View3D&){
+      const int b = block.slot_id;
+      bool quiet = true;
+      Kokkos::parallel_reduce("ContrastDerefineCheck",
+        Kokkos::MDRangePolicy<Kokkos::Rank<2>>({block.is, block.js}, {block.ie + 1, block.je + 1}),
+        KOKKOS_LAMBDA(int i, int j, bool& q){
+          const Real rho = data(b, i, j, IDN), mx = data(b, i, j, IM1), my = data(b, i, j, IM2);
+          const Real pr = gm1*(data(b, i, j, IEN) - 0.5*(mx*mx + my*my)/rho);
+          const Real c = Kokkos::fmax(Kokkos::fabs(rho/ref_rho(b, i, j) - 1.0), Kokkos::fabs(pr/ref_p(b, i, j) - 1.0));
+          if(c >= derefine_grad_threshold) q = false;
+        }, Kokkos::LAnd<bool>(quiet));
+      return quiet;
     };
 
     exchange_ghosts();
@@ -349,6 +380,13 @@ int main(int argc, char* argv[]){
 
     try{
       while(t < tf){
+        if(use_reference && par.wb_reference_reset >= 0.0 && !reference.was_reset() && t >= par.wb_reference_reset){
+          reference.reset(mesh, par.gamma, potential.view(), par.wb_eq);
+          std::cout << "\nwell_balanced: reference equilibrium re-captured at t = " << t << "\n";
+          if(par.wb_reference_check)
+            std::cout << "wb_reference_check: max relative deviation of the reset ghost cells from the closure = "
+                      << reference.check_reset_ghosts(mesh, potential.view(), par.wb_eq) << "\n";
+        }
         //AMR part
         if(par.use_amr && n%par.amr_interval == 0){
           std::vector<std::unique_ptr<MeshBlock>> old_blocks;
@@ -358,7 +396,12 @@ int main(int argc, char* argv[]){
           Kokkos::deep_copy(old_data, mesh.get_data_view());
 
           //run Tree Refinement & Derefinement
-          mesh.UpdateDynamicMesh(density_gradient_refine, density_gradient_derefine, par.amr_max_level, derefine_grad_threshold);
+          if(use_reference) reference.begin_regrid(mesh, potential.view()); //regrid with wb
+          //either contrast based refinement if wb or the simple gradient refinement otherwise
+          mesh.UpdateDynamicMesh(use_reference ? contrast_refine : density_gradient_refine,
+                                 use_reference ? contrast_derefine : density_gradient_derefine,
+                                 par.amr_max_level, derefine_grad_threshold);
+
 
           //(UpdateDynamicMesh already rebuilt the active block slots and neighbor maps)
           if(has_potential){ //here we have a new block layout -> tabulate potential again
@@ -368,6 +411,21 @@ int main(int argc, char* argv[]){
 
           //map old states to new blocks (Direct, Prolongation, Restriction)
           mesh.TransferSolution(old_blocks, old_data);
+
+          //map initial to new blocks ~> end regrid and compare new state to initial
+          auto initial_into_next = [&](){
+            mesh.swap_data_views();
+            ProblemHooks scratch_hooks;
+            problem.init(mesh, par, scratch_hooks);
+            mesh.swap_data_views();
+          };
+          if(use_reference){
+            reference.end_regrid(mesh, par.gamma, potential.view(), par.wb_eq, initial_into_next);
+            if(par.wb_reference_check && !reference.was_reset())
+              std::cout << "\nwb_reference_check: max relative difference reference vs initial condition = "
+                        << reference.compare_with_initial(mesh, par.gamma, initial_into_next) << "\n";
+          }
+
 
           //populating ghost zones and boundaries for the new mesh layout immediately!!!
           //OTHERWISE UNSTABLE, DO NOT REMOVE

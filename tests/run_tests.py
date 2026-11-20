@@ -23,6 +23,11 @@ Physics problems checks:
     wb_smr_hband/_vband/_tjump/_nested/_pointmass   well-balancing across static refinement levels
     wb_smr_integrators  wb_smr_hband with euler and rk2
     wb_smr_pulse        a pulse crossing a refined band: mass exactly conserved
+    wb_amr_rest         AMR + well_balanced at rest: nothing refines, at rest to machine precision
+    wb_amr_pulse        a pulse followed by AMR (linear and isothermal): mass exact, close to the uniform run
+    wb_amr_reset_pulse  the same with a reference reset (closure for new blocks afterwards)
+    wb_reset_smr / wb_reset_pointmass   a reset of an exact equilibrium with static refinement stays exact
+    wb_amr_refcheck     self-check: after every regrid, every block's reference equals the initial condition
     nowb_isothermal     well_balanced 0: must drift (the switch matters)
     wb_harmonic_axes    harmonic potential along y and x: at rest, x == transposed y (all 4 walls)
     wb_perturbation     a 1e-6 pressure pulse propagates; the far field stays at round-off
@@ -514,6 +519,34 @@ def test_wb_smr_integrators(exe, workdir):
         res.check(f"max |v|/cs ({integ})", mach, mach < 1e-12, "< 1e-12")
     return res
 
+def test_wb_amr_pulse(exe, workdir):
+    """Check amr run against uniform, check max refinement level and conservation"""
+    name = "wb_amr_pulse"
+    res = Result(name)
+    res.runtime, res.outdir = 0.0, None
+    for eq, mass_tol in [("linear", 1e-12), ("isothermal", 1e-10)]:
+        peak = {}
+        for amr in ["1", "0"]:
+            code, log, dt, outdir = run_variant(exe, name, [f"wb_equilibrium {eq}", f"use_amr {amr}"], workdir)
+            res.runtime += dt
+            if code != 0:
+                res.check(f"exit code ({eq}, use_amr {amr})", code, False, "= 0")
+                res.log_tail = "\n".join(log.replace("\r", "\n").splitlines()[-15:])
+                return res
+            frames = read_frames(os.path.join(outdir, "grid.bin"))
+            x, y, Q = stitch(frames[-1])
+            rho, u, v, p = primitives(Q, 1.4)
+            peak[amr] = float(np.max(np.hypot(u, v)/np.sqrt(1.4*p/rho)))
+            if amr == "1":
+                lv = max(b[0] for b in frames[-1][1])
+                res.check(f"AMR refines the pulse ({eq}, max level)", lv, lv == 2, "= 2")
+                dm = abs(totals(frames[-1])[0]/totals(frames[0])[0] - 1)
+                res.check(f"mass conservation with AMR ({eq})", dm, dm < mass_tol, f"< {mass_tol:g}")
+        q = peak["1"]/peak["0"]
+        res.check(f"peak |v|/cs AMR / uniform ({eq})", q, 0.5 < q < 2.0, "in (0.5, 2)")
+    return res
+
+
 def test_outflow_walls(exe, workdir):
     """gas streams towards each wall in turn (cases outflow_left/right/bottom/top), with Outflow
     on both walls of that direction: one wall lets the gas leave, the other must block inflow.
@@ -595,6 +628,8 @@ def test_case(exe, name, workdir):
         return test_convergence(exe, name, workdir,
                                 {"euler": (0.0, 1.2), "vl2": (1.8, 2.3), "rk2": (1.8, 2.3)},
                                 [("vl2", 0.5), ("rk2", 0.5)])
+    if name == "wb_amr_pulse":
+        return test_wb_amr_pulse(exe, workdir)
     if name == "wb_smr_integrators":  # runs its case with euler and rk2
         return test_wb_smr_integrators(exe, workdir)
     if name == "wb_pointmass_integrators":  # runs its case with euler and rk2
@@ -685,6 +720,31 @@ def test_case(exe, name, workdir):
         atmosphere_rest(res, frames, gamma, 1e-12)
         lv = max(b[0] for b in frames[-1][1])
         res.check("refined blocks present (max level)", lv, lv >= 1, ">= 1")
+    elif name in ("wb_amr_rest", "wb_reset_smr", "wb_reset_pointmass"):
+        if name == "wb_amr_rest":
+            lv = max(max(b[0] for b in f[1]) for f in frames)
+            res.check("nothing refined at rest (max level, all snapshots)", lv, lv == 0, "= 0")
+            if lv != 0:
+                return res
+        atmosphere_rest(res, frames, gamma, 1e-12)
+        if "reset" in name:
+            done = "reference equilibrium re-captured" in log
+            res.check("the reset happened", int(done), done, "= 1")
+            vals = [float(v) for v in re.findall(r"from the closure = ([0-9.eE+-]+)", log)]
+            worst = max(vals) if vals else 1.0
+            res.check("reset ghost cells = family closure (max rel. deviation)", worst, worst < 1e-14, "< 1e-14")
+    elif name == "wb_amr_reset_pulse":
+        dm = abs(totals(frames[-1])[0]/totals(frames[0])[0] - 1)
+        res.check("mass conservation |dM|/M", dm, dm < 1e-12, "< 1e-12")
+        lv = max(b[0] for b in frames[-1][1])
+        res.check("AMR refines the pulse (max level)", lv, lv >= 1, ">= 1")
+        done = "reference equilibrium re-captured" in log
+        res.check("the reset happened", int(done), done, "= 1")
+    elif name == "wb_amr_refcheck":
+        vals = [float(v) for v in re.findall(r"initial condition = ([0-9.eE+-]+)", log)]
+        res.check("regrids checked", len(vals), len(vals) >= 10, ">= 10")
+        worst = max(vals) if vals else 1.0
+        res.check("max |reference / initial condition - 1|", worst, worst < 1e-14, "< 1e-14")
     elif name == "wb_smr_pulse":
         dm = abs(totals(frames[-1])[0]/totals(frames[0])[0] - 1)
         res.check("mass conservation |dM|/M", dm, dm < 1e-12, "< 1e-12")
@@ -778,7 +838,8 @@ ALL = ["sod_uniform", "sod_smr", "sod_amr", "sod_amr_level2",
        "turb_solenoidal_vl2", "wb_pointmass_iso", "wb_pointmass_poly", "wb_pointmass_linear",
        "wb_pointmass_integrators", "wb_pointmass_pert", "invalid_wb_equilibrium",
        "wb_smr_hband", "wb_smr_vband", "wb_smr_tjump", "wb_smr_nested", "wb_smr_pointmass",
-       "wb_smr_integrators", "wb_smr_pulse"]
+       "wb_smr_integrators", "wb_smr_pulse", "wb_amr_rest", "wb_amr_pulse", "wb_amr_reset_pulse",
+       "wb_reset_smr", "wb_reset_pointmass", "wb_amr_refcheck"]
 
 def main():
     ap = argparse.ArgumentParser(description="Szuchydro test suite")

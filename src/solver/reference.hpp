@@ -1,7 +1,10 @@
 #pragma once
 
 #include "core/hydro_config.hpp"
+#include <functional>
+#include <vector>
 #include "mesh/mesh.hpp"
+#include "hydro/reconstruction.hpp"
 
 /*
  Reference equilibrium for well-balancing across refinement levels
@@ -34,7 +37,27 @@ public:
   void to_deviation(Mesh& mesh, Real gamma) const;
   void from_deviation(Mesh& mesh, Real gamma) const;
   bool captured() const { return rho_.extent(0) > 0; }
+  void reset(Mesh& mesh, Real gamma, const View3D& phi, const WBEquilibrium& eq);
+  bool was_reset() const { return reset_done_; }
+
+  void begin_regrid(Mesh& mesh, const View3D& phi_old);
+  void end_regrid(Mesh& mesh, Real gamma, const View3D& phi_new, const WBEquilibrium& eq,
+                  const std::function<void()>& initial_into_next);
+
+  Real compare_with_initial(Mesh& mesh, Real gamma, const std::function<void()>& initial_into_next);
+  Real check_reset_ghosts(Mesh& mesh, const View3D& phi, const WBEquilibrium& eq);
+
+  const View3D& rho() const { return rho_; }
+  const View3D& p() const { return p_; }
+
+  void sync_same_level_ghosts(Mesh& mesh, Real gamma);
+
 
 private:
   View3D rho_, p_;
+  View3D rho_old_, p_old_;
+  std::vector<LogicalLocation> old_locs_;
+  std::vector<int> old_slots_;
+  std::vector<Real> old_phi_c_;
+  bool reset_done_ = false;
 };

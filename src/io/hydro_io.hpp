@@ -64,6 +64,8 @@ struct SimParams {
   //wb_polytropic_gamma (default gamma);
   //read only with well_balanced 1
   WBEquilibrium wb_eq;
+  Real wb_reference_reset = -1.0; //dont reset ref
+  bool wb_reference_check = false; //dont compare wb after regrid to initial
   //Dirichlet walls: fixed primitive state (rho, u, v, p), only used if that wall is Dirichlet
   struct WallState { Real rho = 0.0, u = 0.0, v = 0.0, p = 0.0; };
   WallState dir_left, dir_right, dir_bottom, dir_top;

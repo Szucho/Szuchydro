@@ -88,6 +88,8 @@ SimParams readParams(const std::string& filename){ //reads in params.txt
   p.integrator = has("integrator") ? get("integrator") : "vl2";
   p.well_balanced = has("well_balanced") ? (geti("well_balanced") != 0) : false;
   if(p.well_balanced){ //read only here: without well_balanced these keys are reported as unused
+    p.wb_reference_reset = has("wb_reference_reset") ? getd("wb_reference_reset") : -1.0;
+    p.wb_reference_check = has("wb_reference_check") ? (geti("wb_reference_check") != 0) : false;
     const std::string eqn = has("wb_equilibrium") ? get("wb_equilibrium") : "linear";
     if     (eqn == "linear")     p.wb_eq.type = WB_LINEAR;
     else if(eqn == "isothermal") p.wb_eq.type = WB_ISOTHERMAL;
