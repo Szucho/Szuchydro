@@ -52,6 +52,9 @@ struct SimParams {
   int amr_interval = 5;  //check refinement level every amr interval steps
   Real amr_refine_tol = 0.05; //refine a block if the relative density jump exeeds this tolerance value
   Real amr_derefine_tol = 0.01; //derefine if it stays below this everywhere
+  //one refinement criterion per run (density_gradient, pressure_gradient, vorticity, contrast, hook);
+  //empty: density_gradient, or contrast when the well-balanced reference is active
+  std::string amr_criterion;
   //reconstruction: limiter (minmod, vanleer, superbee, mc) and variables (conserved, primitive)
   ReconOptions recon;
   //time integrator (euler, vl2, rk2), checked when integrator is created

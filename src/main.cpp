@@ -129,6 +129,40 @@ Real rel_density_gradient(const View4D& data, int b, int i, int j){
   return Kokkos::max(grad_x, grad_y);
 }
 
+//AMR criteria (amr_criterion): one measure per cell, the same for refinement and derefinement
+enum AmrCriterion : int { AMR_DENSITY = 0, AMR_PRESSURE = 1, AMR_VORTICITY = 2, AMR_CONTRAST = 3 };
+
+KOKKOS_INLINE_FUNCTION
+Real cell_pressure(const View4D& data, int b, int i, int j, Real gm1){
+  const Real rho = data(b, i, j, IDN), mx = data(b, i, j, IM1), my = data(b, i, j, IM2);
+  return gm1*(data(b, i, j, IEN) - 0.5*(mx*mx + my*my)/rho);
+}
+
+KOKKOS_INLINE_FUNCTION
+Real refinement_measure(int crit, const View4D& data, int b, int i, int j, Real gm1, Real dx, Real dy,
+                        const View3D& ref_rho, const View3D& ref_p){
+  if(crit == AMR_PRESSURE){ //relative central pressure jump, like the density criterion
+    const Real p = cell_pressure(data, b, i, j, gm1);
+    const Real gx = Kokkos::abs(cell_pressure(data, b, i + 1, j, gm1) -
+        cell_pressure(data, b, i - 1, j, gm1))/(2.0*p + 1e-12);
+    const Real gy = Kokkos::abs(cell_pressure(data, b, i, j + 1, gm1) -
+        cell_pressure(data, b, i, j - 1, gm1))/(2.0*p + 1e-12);
+    return Kokkos::max(gx, gy);
+  }
+  if(crit == AMR_VORTICITY){ //|omega| dx / c_s: velocity change across a cell from rotation, in sound speeds
+    auto u = [&](int ii, int jj){ return data(b, ii, jj, IM1)/data(b, ii, jj, IDN); };
+    auto v = [&](int ii, int jj){ return data(b, ii, jj, IM2)/data(b, ii, jj, IDN); };
+    const Real omega = (v(i + 1, j) - v(i - 1, j))/(2.0*dx) - (u(i, j + 1) - u(i, j - 1))/(2.0*dy);
+    const Real cs = Kokkos::sqrt((gm1 + 1.0)*cell_pressure(data, b, i, j, gm1)/data(b, i, j, IDN));
+    return Kokkos::abs(omega)*Kokkos::min(dx, dy)/cs;
+  }
+  if(crit == AMR_CONTRAST){ //deviation from the well-balanced reference equilibrium
+    const Real rho = data(b, i, j, IDN);
+    const Real pr = cell_pressure(data, b, i, j, gm1);
+    return Kokkos::fmax(Kokkos::fabs(rho/ref_rho(b, i, j) - 1.0), Kokkos::fabs(pr/ref_p(b, i, j) - 1.0));
+  }
+  return rel_density_gradient(data, b, i, j);
+}
 
 int main(int argc, char* argv[]){
   int exit_code = 0; //not zero if run fails so scripts and CI can tell
@@ -232,79 +266,62 @@ int main(int argc, char* argv[]){
     Real refine_grad_threshold = par.amr_refine_tol;     //refine if local density gradient is high
     Real derefine_grad_threshold = par.amr_derefine_tol; //derefine if local gradients are quiet
 
-    BlockCriterion density_gradient_refine = [refine_grad_threshold](const MeshBlock& block,
-                                                                          const View4D& data,
-                                                                          const View3D& rho_init){
-      int b = block.slot_id;
-      int is = block.is, ie = block.ie;
-      int js = block.js, je = block.je;
-
-      bool needs_refinement = false;
-
-      Kokkos::parallel_reduce("DensityGradientCheck",
-        Kokkos::MDRangePolicy<Kokkos::Rank<2>>({is, js}, {ie + 1, je + 1}),
-        KOKKOS_LAMBDA(int i, int j, bool& local_refine){
-          if(rel_density_gradient(data, b, i, j) > refine_grad_threshold) local_refine = true;
-        },
-        Kokkos::LOr<bool>(needs_refinement)
-      );
-      return needs_refinement;
-    };
-
-    BlockCriterion density_gradient_derefine = [derefine_grad_threshold](const MeshBlock& block,
-                                                                              const View4D& data,
-                                                                              const View3D& rho_init){
-      int b = block.slot_id;
-      int is = block.is, ie = block.ie;
-      int js = block.js, je = block.je;
-
-      bool all_cells_quiet = true;
-
-      Kokkos::parallel_reduce("DensityGradientDerefineCheck",
-        Kokkos::MDRangePolicy<Kokkos::Rank<2>>({is, js}, {ie + 1, je + 1}),
-        KOKKOS_LAMBDA(int i, int j, bool& local_quiet){
-          if(rel_density_gradient(data, b, i, j) >= derefine_grad_threshold) local_quiet = false;
-        },
-        Kokkos::LAnd<bool>(all_cells_quiet)
-      );
-      return all_cells_quiet;
-    };
-
-
     //well balancing thru the reference equilibrium
     //during regrid the blocks are keeping well balancing with an error of delta x^2/L
     //whithout giving up the conserved vars
     //first: do we have references? if not then use 0 as reference
     View3D ref_rho = use_reference ? reference.rho() : View3D(), ref_p = use_reference ? reference.p() : View3D();
     const Real gm1 = par.gamma - 1.0; //just to make life easier
-    //refinement criterion based on contrast (density or pressure contrast)
-    BlockCriterion contrast_refine = [=](const MeshBlock& block, const View4D& data, const View3D&){
+    //one criterion per run; default density_gradient, or contrast when the reference is active
+    const std::string crit_name = !par.amr_criterion.empty() ? par.amr_criterion
+                                                             : (use_reference ? "contrast" : "density_gradient");
+    if(par.use_amr && crit_name == "contrast" && !use_reference)
+      throw std::runtime_error("Parameter error: amr_criterion contrast needs well_balanced 1 "
+                               "(it measures the deviation from the reference equilibrium)");
+    if(par.use_amr && crit_name == "hook" && !hooks.refine)
+      throw std::runtime_error("Parameter error: amr_criterion hook needs a problem that defines a refinement hook");
+    const int crit = crit_name == "pressure_gradient" ? AMR_PRESSURE
+                   : crit_name == "vorticity" ? AMR_VORTICITY
+                   : crit_name == "contrast" ? AMR_CONTRAST : AMR_DENSITY;
+    //the same measure decides both: refine if any cell is above amr_refine_tol,
+    //derefine only if every cell is below amr_derefine_tol
+    BlockCriterion measure_refine = [=](const MeshBlock& block, const View4D& data, const View3D&){
+
       const int b = block.slot_id;
+      const Real dx = block.dx1(), dy = block.dx2();
       bool refine = false;
-      Kokkos::parallel_reduce("ContrastRefineCheck",
+      Kokkos::parallel_reduce("AmrRefineCheck",
         Kokkos::MDRangePolicy<Kokkos::Rank<2>>({block.is, block.js}, {block.ie + 1, block.je + 1}),
         KOKKOS_LAMBDA(int i, int j, bool& r){
-          const Real rho = data(b, i, j, IDN), mx = data(b, i, j, IM1), my = data(b, i, j, IM2);
-          const Real pr = gm1*(data(b, i, j, IEN) - 0.5*(mx*mx + my*my)/rho);
-          const Real c = Kokkos::fmax(Kokkos::fabs(rho/ref_rho(b, i, j) - 1.0), Kokkos::fabs(pr/ref_p(b, i, j) - 1.0));
-          if(c > refine_grad_threshold) r = true;
+          if(refinement_measure(crit, data, b, i, j, gm1, dx, dy, ref_rho, ref_p) > refine_grad_threshold) r = true;
         }, Kokkos::LOr<bool>(refine));
       return refine;
     };
-    //same as before but derefinement
-    BlockCriterion contrast_derefine = [=](const MeshBlock& block, const View4D& data, const View3D&){
+    BlockCriterion measure_derefine = [=](const MeshBlock& block, const View4D& data, const View3D&){
       const int b = block.slot_id;
+      const Real dx = block.dx1(), dy = block.dx2();
       bool quiet = true;
-      Kokkos::parallel_reduce("ContrastDerefineCheck",
+      Kokkos::parallel_reduce("AmrDerefineCheck",
         Kokkos::MDRangePolicy<Kokkos::Rank<2>>({block.is, block.js}, {block.ie + 1, block.je + 1}),
         KOKKOS_LAMBDA(int i, int j, bool& q){
-          const Real rho = data(b, i, j, IDN), mx = data(b, i, j, IM1), my = data(b, i, j, IM2);
-          const Real pr = gm1*(data(b, i, j, IEN) - 0.5*(mx*mx + my*my)/rho);
-          const Real c = Kokkos::fmax(Kokkos::fabs(rho/ref_rho(b, i, j) - 1.0), Kokkos::fabs(pr/ref_p(b, i, j) - 1.0));
-          if(c >= derefine_grad_threshold) q = false;
+          if(refinement_measure(crit, data, b, i, j, gm1, dx, dy, ref_rho, ref_p)>=derefine_grad_threshold) q = false;
         }, Kokkos::LAnd<bool>(quiet));
       return quiet;
     };
+
+    //amr_criterion hook: the problem decides from the block's region, level and the time of the check
+    Real amr_time = par.t0;
+    BlockCriterion hook_refine = [&hooks, &amr_time](const MeshBlock& block, const View4D&, const View3D&){
+      return hooks.refine(block.block_size.x1min, block.block_size.x1max, block.block_size.x2min,
+                          block.block_size.x2max, block.loc.level, amr_time) > 0;
+    };
+    BlockCriterion hook_derefine = [&hooks, &amr_time](const MeshBlock& block, const View4D&, const View3D&){
+      return hooks.refine(block.block_size.x1min, block.block_size.x1max, block.block_size.x2min,
+                          block.block_size.x2max, block.loc.level, amr_time) < 0;
+    };
+    const BlockCriterion amr_refine_crit = (crit_name == "hook") ? hook_refine : measure_refine;
+    const BlockCriterion amr_derefine_crit = (crit_name == "hook") ? hook_derefine : measure_derefine;
+
 
     exchange_ghosts();
     apply_bcs();
@@ -398,8 +415,8 @@ int main(int argc, char* argv[]){
           //run Tree Refinement & Derefinement
           if(use_reference) reference.begin_regrid(mesh, potential.view()); //regrid with wb
           //either contrast based refinement if wb or the simple gradient refinement otherwise
-          mesh.UpdateDynamicMesh(use_reference ? contrast_refine : density_gradient_refine,
-                                 use_reference ? contrast_derefine : density_gradient_derefine,
+          amr_time = t;
+          mesh.UpdateDynamicMesh(amr_refine_crit, amr_derefine_crit,
                                  par.amr_max_level, derefine_grad_threshold);
 
 

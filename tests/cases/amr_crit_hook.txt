@@ -1,0 +1,33 @@
+# Point mass with amr_criterion hook: the problem's geometry hook refines every block within
+# pm_refine_radius of the mass. The blocks containing the mass must be at level 2, blocks clearly
+# outside the radius at level 0.
+Nx 64
+Ny 64
+nx1_block 16
+nx2_block 16
+Nt 1000
+t0 0.0
+tf 0.1
+xmin -2.0
+xmax 2.0
+ymin -2.0
+ymax 2.0
+gamma 1.4
+cfl 0.4
+n_frames 2
+bc_left Hydrostatic
+bc_right Hydrostatic
+bc_bottom Hydrostatic
+bc_top Hydrostatic
+gas_profile pointmass
+gas_rho0 1.0
+well_balanced 1
+outdir amr_crit_hook_out
+pm_equilibrium isothermal
+wb_equilibrium isothermal
+use_amr 1
+amr_criterion hook
+amr_max_level 2
+amr_interval 5
+pm_refine_radius 0.5
+max_blocks 256

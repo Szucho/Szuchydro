@@ -77,6 +77,13 @@ SimParams readParams(const std::string& filename){ //reads in params.txt
   p.amr_interval = opti("amr_interval", p.amr_interval);
   p.amr_refine_tol = optd("amr_refine_tol", p.amr_refine_tol);
   p.amr_derefine_tol = optd("amr_derefine_tol", p.amr_derefine_tol);
+  if(p.use_amr && has("amr_criterion")){ //read only with AMR, otherwise reported as unused
+    p.amr_criterion = get("amr_criterion");
+    const std::string c = p.amr_criterion;
+    if(c != "density_gradient" && c != "pressure_gradient" && c != "vorticity" && c != "contrast" && c != "hook")
+      throw std::runtime_error("Parameter error: unknown amr_criterion '" + c +
+                               "' (density_gradient, pressure_gradient, vorticity, contrast, hook)");
+  }
   
   //reconstruction options
   const std::string lim = has("limiter") ? get("limiter") : "minmod";

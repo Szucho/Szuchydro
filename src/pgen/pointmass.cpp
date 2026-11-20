@@ -1,4 +1,5 @@
 #include "pgen/pgen.hpp"
+#include <algorithm>
 #include <cmath>
 #include <stdexcept>
 
@@ -38,6 +39,14 @@ void ProblemPointmass(Mesh& mesh, const SimParams& par, ProblemHooks& hooks){
     return -GM/std::sqrt((x - xc)*(x - xc) + (y - yc)*(y - yc) + eps*eps);
   };
   hooks.potential = phi;
+  //example refinement hook (amr_criterion hook): refine every block within pm_refine_radius of the mass
+  const Real r_ref = s.get_real("pm_refine_radius", -1.0);
+  if(r_ref > 0.0)
+    hooks.refine = [xc, yc, r_ref](Real x1min, Real x1max, Real x2min, Real x2max, int, Real){
+      const Real dx = std::max({x1min - xc, 0.0, xc - x1max});
+      const Real dy = std::max({x2min - yc, 0.0, yc - x2max});
+      return (std::sqrt(dx*dx + dy*dy) <= r_ref) ? 1 : -1;
+    };
   const Real phic = phi(xc, yc);
 
   //rho, p of the equilibrium at (x, y)

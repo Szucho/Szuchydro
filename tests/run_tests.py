@@ -28,6 +28,10 @@ Physics problems checks:
     wb_amr_reset_pulse  the same with a reference reset (closure for new blocks afterwards)
     wb_reset_smr / wb_reset_pointmass   a reset of an exact equilibrium with static refinement stays exact
     wb_amr_refcheck     self-check: after every regrid, every block's reference equals the initial condition
+    amr_criterion_select  one AMR crit/run: pressure_gradient refines a pure pressure pulse, density/vorticity do not
+    amr_crit_vorticity  the vorticity criterion refines the vortex centre, not the far field
+    amr_crit_hook       the problem's geometry hook refines exactly its region
+    invalid_amr_criterion  unknown criterion, contrast without well_balanced, hook without a hook: Parameter error
     nowb_isothermal     well_balanced 0: must drift (the switch matters)
     wb_harmonic_axes    harmonic potential along y and x: at rest, x == transposed y (all 4 walls)
     wb_perturbation     a 1e-6 pressure pulse propagates; the far field stays at round-off
@@ -546,6 +550,50 @@ def test_wb_amr_pulse(exe, workdir):
         res.check(f"peak |v|/cs AMR / uniform ({eq})", q, 0.5 < q < 2.0, "in (0.5, 2)")
     return res
 
+def block_distance(b, px, py):
+    """Distance from the point (px, py) to a block's rectangle (0 if the point lies inside or on it)."""
+    dx = max(b[3] - px, 0.0, px - b[4])
+    dy = max(b[5] - py, 0.0, py - b[6])
+    return float(np.hypot(dx, dy))
+
+
+def test_amr_criterion_select(exe, workdir):
+    """One criterion per run: on a pure pressure pulse, pressure_gradient must refine the pulse (and only
+    its neighbourhood) at once, while density_gradient and vorticity must refine nothing."""
+    name = "amr_criterion_select"
+    res = Result(name)
+    res.runtime, res.outdir = 0.0, None
+    for crit, expect_refined in [("pressure_gradient", True), ("density_gradient", False), ("vorticity", False)]:
+        code, log, dt, outdir = run_variant(exe, name, [f"amr_criterion {crit}"], workdir)
+        res.runtime += dt
+        res.check(f"exit code ({crit})", code, code == 0, "= 0")
+        if code != 0:
+            res.log_tail = "\n".join(log.replace("\r", "\n").splitlines()[-15:])
+            return res
+        blocks = read_frames(os.path.join(outdir, "grid.bin"))[-1][1]
+        lv = max(b[0] for b in blocks)
+        if expect_refined:
+            res.check(f"{crit}: pulse refined (max level)", lv, lv == 1, "= 1")
+            far = max([b[0] for b in blocks if block_distance(b, 0.5, 2.0) > 1.0] or [0])
+            res.check(f"{crit}: blocks farther than 1 from the pulse (max level)", far, far == 0, "= 0")
+        else:
+            res.check(f"{crit}: nothing refined (max level)", lv, lv == 0, "= 0")
+    return res
+
+
+def test_invalid_amr_criterion(exe, workdir):
+    """Invalid criterion choices must stop with a Parameter error: an unknown name, contrast without
+    well_balanced (no reference), and hook for a problem that defines no refinement hook."""
+    name = "invalid_amr_criterion"
+    res = Result(name)
+    res.runtime, res.outdir = 0.0, None
+    for crit in ["steepness", "contrast", "hook"]:
+        code, log, dt, outdir = run_variant(exe, name, [f"amr_criterion {crit}"], workdir)
+        res.runtime += dt
+        res.check(f"non-zero exit code ({crit})", code, code != 0, "!= 0")
+        found = "Parameter error" in log
+        res.check(f"'Parameter error' message ({crit})", int(found), found, "= 1")
+    return res
 
 def test_outflow_walls(exe, workdir):
     """gas streams towards each wall in turn (cases outflow_left/right/bottom/top), with Outflow
@@ -628,6 +676,10 @@ def test_case(exe, name, workdir):
         return test_convergence(exe, name, workdir,
                                 {"euler": (0.0, 1.2), "vl2": (1.8, 2.3), "rk2": (1.8, 2.3)},
                                 [("vl2", 0.5), ("rk2", 0.5)])
+    if name == "amr_criterion_select":
+        return test_amr_criterion_select(exe, workdir)
+    if name == "invalid_amr_criterion":
+        return test_invalid_amr_criterion(exe, workdir)
     if name == "wb_amr_pulse":
         return test_wb_amr_pulse(exe, workdir)
     if name == "wb_smr_integrators":  # runs its case with euler and rk2
@@ -740,6 +792,28 @@ def test_case(exe, name, workdir):
         res.check("AMR refines the pulse (max level)", lv, lv >= 1, ">= 1")
         done = "reference equilibrium re-captured" in log
         res.check("the reset happened", int(done), done, "= 1")
+    elif name == "amr_crit_vorticity":
+        blocks = frames[-1][1]
+        cx, cy = 0.1, 0.1  # vortex centre at t = 0.1 (starts at the origin, advected with u0 = v0 = 1)
+        centre = min(b[0] for b in blocks if block_distance(b, cx, cy) == 0.0)
+        res.check("blocks at the vortex centre (min level)", centre, centre == 2, "= 2")
+        far = max([b[0] for b in blocks if block_distance(b, cx, cy) > 3.0] or [0])
+        res.check("blocks farther than 3 from the centre (max level)", far, far == 0, "= 0")
+    elif name == "amr_crit_hook":
+        blocks = frames[-1][1]
+        centre = min(b[0] for b in blocks if block_distance(b, 0.0, 0.0) == 0.0)
+        res.check("blocks touching the mass (min level)", centre, centre == 2, "= 2")
+        # the hook refines a block whose region touches pm_refine_radius, and refinement splits it into
+        # all four children, so every level-2 block's PARENT (level-1 block, 0.5 wide from -2) must touch
+        # the radius; level-1 buffer blocks further out come from the mesh's 2:1 level balance
+        def parent(b):
+            x0 = -2.0 + 0.5*np.floor((b[3] + 2.0)/0.5 + 1e-9)
+            y0 = -2.0 + 0.5*np.floor((b[5] + 2.0)/0.5 + 1e-9)
+            return (None, None, None, x0, x0 + 0.5, y0, y0 + 0.5)
+        outside = sum(1 for b in blocks if b[0] == 2 and block_distance(parent(b), 0.0, 0.0) > 0.5 + 1e-12)
+        res.check("level-2 blocks whose parent lies outside pm_refine_radius (count)", outside, outside == 0, "= 0")
+        coarse = sum(1 for b in blocks if b[0] == 0)
+        res.check("level-0 blocks remain (count)", coarse, coarse > 0, "> 0")
     elif name == "wb_amr_refcheck":
         vals = [float(v) for v in re.findall(r"initial condition = ([0-9.eE+-]+)", log)]
         res.check("regrids checked", len(vals), len(vals) >= 10, ">= 10")
@@ -839,7 +913,8 @@ ALL = ["sod_uniform", "sod_smr", "sod_amr", "sod_amr_level2",
        "wb_pointmass_integrators", "wb_pointmass_pert", "invalid_wb_equilibrium",
        "wb_smr_hband", "wb_smr_vband", "wb_smr_tjump", "wb_smr_nested", "wb_smr_pointmass",
        "wb_smr_integrators", "wb_smr_pulse", "wb_amr_rest", "wb_amr_pulse", "wb_amr_reset_pulse",
-       "wb_reset_smr", "wb_reset_pointmass", "wb_amr_refcheck"]
+       "wb_reset_smr", "wb_reset_pointmass", "wb_amr_refcheck", "amr_criterion_select",
+       "amr_crit_vorticity", "amr_crit_hook", "invalid_amr_criterion"]
 
 def main():
     ap = argparse.ArgumentParser(description="Szuchydro test suite")

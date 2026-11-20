@@ -1,0 +1,34 @@
+# Yee vortex with amr_criterion vorticity (|omega| dx / c_s): the block at the vortex centre must reach
+# level 2, blocks far from it must stay at level 0.
+nx1_block 16
+nx2_block 16
+Nt 1000
+t0 0.0
+tf 0.1
+xmin -5.0
+xmax 5.0
+ymin -5.0
+ymax 5.0
+gamma 1.4
+cfl 0.4
+n_frames 1
+limiter mc
+bc_left Periodic
+bc_right Periodic
+bc_bottom Periodic
+bc_top Periodic
+gas_profile vortex
+gas_u0 1.0
+gas_v0 1.0
+vortex_beta 5.0
+Nx 64
+Ny 64
+integrator euler
+outdir amr_crit_vorticity_out
+use_amr 1
+amr_criterion vorticity
+amr_max_level 2
+amr_interval 5
+amr_refine_tol 0.05
+amr_derefine_tol 0.01
+max_blocks 256

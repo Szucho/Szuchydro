@@ -43,6 +43,10 @@ struct ProblemHooks{
   std::function<void(Mesh& mesh, Real dt)> source_terms;
   //extra ghost-cell treatment, applied right after the physical boundary conditions
   std::function<void(Mesh& mesh)> boundaries;
+  //"amr_criterion hook": the problem decides refinement from a block's region,
+  //level and the time return > 0 refine, < 0 derefine, 0 keep
+  std::function<int(Real x1min, Real x1max, Real x2min, Real x2max, int level, Real t)> refine;
+
 };
 
 //the initial condition has to be set up
