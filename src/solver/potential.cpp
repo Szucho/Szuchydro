@@ -105,21 +105,28 @@ void hydrostatic_ghost_baro(const View4D& U, const View3D& phi, Real gamma, cons
   U(b, gi, gj, IEN) = p/(gamma - 1.0) + 0.5*rho*(u*u + v*v);
 }
 
-void ApplyHydrostaticGhosts(Mesh& mesh, const View3D& phi, const GridBC& bc,
-                            Real gamma, const WBEquilibrium& eq){
+WallFlags HydrostaticWallFlags(Mesh& mesh, const GridBC& bc){
   const int n_active = mesh.num_active_blocks();
-  if(n_active == 0) return;
   const bool wall[4] = {bc.left.type == BCType::Hydrostatic, bc.right.type == BCType::Hydrostatic,
                         bc.bottom.type == BCType::Hydrostatic, bc.top.type == BCType::Hydrostatic};
-  if(!(wall[0] || wall[1] || wall[2] || wall[3])) return;
+  if(n_active == 0 || !(wall[0] || wall[1] || wall[2] || wall[3])) return WallFlags();
 
   //per active block: which faces are Hydrostatic physical walls (XM, XP, YM, YP)
-  Kokkos::View<int*[4], MemorySpace> hw("hydrostatic_walls", n_active);
+  WallFlags hw("hydrostatic_walls", n_active);
   auto h_hw = Kokkos::create_mirror_view(hw);  //mirror: same layout as the device view
   const auto& blocks = mesh.blocks();
   for(int b = 0; b < n_active; ++b)
     for(int f = 0; f < 4; ++f) h_hw(b, f) = (blocks[b]->is_physical_boundary[f] && wall[f]) ? 1 : 0;
   Kokkos::deep_copy(hw, h_hw);
+  return hw;
+}
+
+void ApplyHydrostaticGhosts(Mesh& mesh, const View3D& phi, const GridBC& bc,
+                            Real gamma, const WBEquilibrium& eq){
+  const int n_active = mesh.num_active_blocks();
+  if(n_active == 0) return;
+  const WallFlags hw = HydrostaticWallFlags(mesh, bc);
+  if(hw.extent(0) == 0) return;
 
   View4D U = mesh.get_data_view();
   const int ng = mesh.inputs().nghost, nx1 = mesh.inputs().nx1_block, nx2 = mesh.inputs().nx2_block;
@@ -128,7 +135,6 @@ void ApplyHydrostaticGhosts(Mesh& mesh, const View3D& phi, const GridBC& bc,
 
   //x-walls: ghost columns, interior rows; y-walls: ghost rows, interior columns
   const WBEquilibrium e = eq;                  //plain struct copied into the kernels
-  const bool baro = e.type != WB_LINEAR;       //barotropic families
   Kokkos::parallel_for("HydrostaticGhostsX",
     Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0, js, 0}, {n_active, je + 1, ng}),
     KOKKOS_LAMBDA(const int b, const int j, const int g){

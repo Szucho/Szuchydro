@@ -249,6 +249,7 @@ int main(int argc, char* argv[]){
     if(has_potential){
       potential.fill(mesh, hooks.potential);
       integrator.set_potential(potential.view(), par.well_balanced, par.wb_eq);
+      integrator.set_walls(HydrostaticWallFlags(mesh, bc));
     }
 
 
@@ -424,6 +425,7 @@ int main(int argc, char* argv[]){
           if(has_potential){ //here we have a new block layout -> tabulate potential again
             potential.fill(mesh, hooks.potential);
             integrator.set_potential(potential.view(), par.well_balanced, par.wb_eq);
+            integrator.set_walls(HydrostaticWallFlags(mesh, bc));
           }
 
           //map old states to new blocks (Direct, Prolongation, Restriction)

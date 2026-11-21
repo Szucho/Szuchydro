@@ -12,8 +12,8 @@
  Time integration: U^n -> U^{n+1} over one step dt.
 
  Integrators (parameter "integrator"):
-   euler   forward Euler: U^{n+1} = U^n + dt L(U^n)                   (default; 1st order in time)
-   vl2     van Leer predictor-corrector (Stone & Gardiner 2009), 2nd order in time:
+   euler   forward Euler: U^{n+1} = U^n + dt L(U^n)                   (1st order in time)
+   vl2     van Leer predictor-corrector (Stone & Gardiner 2009), 2nd order in time (default):
              U*      = U^n + dt/2 L1(U^n)    L1: first-order (piecewise-constant) face states
              U^{n+1} = U^n + dt   L(U*)      L:  the normal second-order reconstruction
    rk2     Heun / SSP-RK2, 2nd order in time:
@@ -41,6 +41,7 @@ class TimeIntegrator{
     View3D phi_; //defaults to empty = no external potential field
     bool well_balanced_ = false;
     WBEquilibrium eq_; //equilibrium family of the well-balanced scheme
+    WallFlags walls_; //Hydrostatic walls: reflecting-wall flux in ComputeFluxes
     View4D flux_reg_saved_; //rk2: block-edge fluxes of stage 1 
   
   public:
@@ -59,6 +60,7 @@ class TimeIntegrator{
     //external potential (tabulated by PotentialField):
     //its source is part of L(U), evaluated from the stage like the fluxes.
     //well balanced selects the hydrostatic reconstruction
+    void set_walls(const WallFlags& walls){ walls_ = walls; } //after setup and after every regrid
     void set_potential(const View3D& phi, bool well_balanced, const WBEquilibrium& eq = WBEquilibrium()){
       phi_ = phi; well_balanced_ = well_balanced; eq_ = eq;
     }

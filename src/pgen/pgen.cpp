@@ -10,9 +10,9 @@ static const ProblemEntry problems[] = {
   {"sedov",   ProblemSedov,   "Sedov-Taylor blast: energy sedov_E inside radius sedov_r"},
   {"disk_Rz", ProblemDiskRz,  "stirred protoplanetary disk with winds in the R-z plane"},
   {"turb",    ProblemTurb,    "driven turbulence in a periodic box (few-mode OU forcing, turb_* keys)"},
-  {"atmosphere", ProblemAtmosphere, "stratified layer in hydro equilibrium in external potential (atm_*keys)"},
+  {"atmosphere", ProblemAtmosphere, "stratified layer in hydro equilibrium in external potential (atm_ * keys)"},
   {"advect",  ProblemAdvect,  "advected density sine wave (convergence test, adv_* keys)"},
-  {"vortex",  ProblemVortex,  "isentropic vortex [Yeet et al. 1999] (convergence test, vortex_* keys)"},
+  {"vortex",  ProblemVortex,  "isentropic vortex [Yee et al. 1999] (convergence test, vortex_* keys)"},
   {"pointmass", ProblemPointmass, "barotropic atmosphere around a softened point mass (2D potential; pm_* keys)"},
 };
 

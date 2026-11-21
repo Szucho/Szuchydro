@@ -5,6 +5,7 @@
 #include "mesh/mesh.hpp"
 #include "bvals/bvals.hpp"
 #include "hydro/reconstruction.hpp"
+#include "solver/rhs.hpp"
 
 /*
  External potential phi(x, y): any conservative force field entering the Euler (or Navier-Stokes)
@@ -47,6 +48,10 @@ void AddPotentialSource(Mesh& mesh, const View3D& phi, const View4D& U_stage, co
 //the energy source is the same as above
 void AddPotentialSourceBarotropic(Mesh& mesh, const View3D& phi, const View4D& U_stage, const View4D& U_out,
                                   Real dt, Real gamma, const WBEquilibrium& eq);
+
+//which faces of the active blocks are Hydrostatic physical walls (empty view if there are none);
+//used by the Hydrostatic ghost cells and by the reflecting-wall flux in ComputeFluxes
+WallFlags HydrostaticWallFlags(Mesh& mesh, const GridBC& bc);
 
 
 //ghost cells of Hydrostatic walls (after the regular BC has mirrored them like Closed walls):

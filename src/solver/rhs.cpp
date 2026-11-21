@@ -14,7 +14,8 @@ FaceFluxes AllocateFaceFluxes(const MeshInputs& in){
 //then compute them
 void ComputeFluxes(Mesh& mesh, const View4D& U, Real gamma, const ReconOptions& recon,
                    const FaceFluxes& F, const View3D& phi, 
-                   bool well_balanced, bool first_order, const WBEquilibrium& eq){
+                   bool well_balanced, bool first_order, const WBEquilibrium& eq,
+                   const WallFlags& walls){
   const int n_active = mesh.num_active_blocks(); //active meshblocks
   if(n_active == 0) return;
   const int nx1 = mesh.inputs().nx1_block; //nx1, nx2 and ng are local to meshblocks
@@ -31,6 +32,7 @@ void ComputeFluxes(Mesh& mesh, const View4D& U, Real gamma, const ReconOptions& 
   const bool fo = first_order;
   const WBEquilibrium e = eq;
   const bool baro = wb && e.type != WB_LINEAR;
+  const bool nw = walls.extent(0) > 0; //any Hydrostatic walls
 
   //x-faces: face f lies between cells i-1 and i, with i = is + f
   Kokkos::parallel_for("FluxesX",
@@ -46,7 +48,7 @@ void ComputeFluxes(Mesh& mesh, const View4D& U, Real gamma, const ReconOptions& 
       }
       Vec4 l, r; //left and right init
       if(fo){ //first order (VL2 predictor)
-        if(baro)    reconstruct_face_wb_baro_first_order(m1, c0, phi(b, i-1, j), phi(b, i, j), gamma, e, l, r);
+        if(baro) reconstruct_face_wb_baro_first_order(m1, c0, phi(b, i-1, j), phi(b, i, j),gamma,e,l,r);
         else if(wb) reconstruct_face_wb_first_order(m1, c0, phi(b, i-1, j), phi(b, i, j), gamma, l, r);
         else reconstruct_face_first_order(m1, c0, l, r);
         } else if(baro){
@@ -59,7 +61,20 @@ void ComputeFluxes(Mesh& mesh, const View4D& U, Real gamma, const ReconOptions& 
       } else {
         reconstruct_face(m2, m1, c0, p1, block_dx1(b), gamma, opt, l, r);
       }
-      const Vec4 flux = FluxhllcX(l, r, gamma); //flux vals
+      Vec4 flux = FluxhllcX(l, r, gamma); //flux vals
+      //Hydrostatic wall: Riemann problem between the interior face state and its mirror image
+      //(normal velocity reversed). By symmetry the mass, energy and tangential momentum fluxes vanish
+      //(set exactly: the wall is impermeable); the momentum flux is the reflected pressure p*, which
+      //equals the well-balanced face pressure p0 at rest
+      if(nw && ((f == 0 && walls(b, 0)) || (f == nx1 && walls(b, 1)))){
+        const Vec4 in = (f == 0) ? r : l;
+        Vec4 mir = in;
+        mir[IM1] = -in[IM1];
+        flux = (f == 0) ? FluxhllcX(mir, in, gamma) : FluxhllcX(in, mir, gamma);
+        flux[IDN] = 0.0;
+        flux[IM2] = 0.0;
+        flux[IEN] = 0.0;
+      }
       for(size_t k = 0; k < NVAR; ++k) fx(b, f, jj, k) = flux[k];
       //flux register (refluxing at refinement boundaries):
       //with well-balancing it stores the momentum
@@ -102,7 +117,7 @@ void ComputeFluxes(Mesh& mesh, const View4D& U, Real gamma, const ReconOptions& 
       }
       Vec4 l, r;
       if(fo){ //first odrer (VL2 predictor)
-        if(baro)    reconstruct_face_wb_baro_first_order(m1, c0, phi(b, i, j-1), phi(b, i, j), gamma, e, l, r);
+        if(baro) reconstruct_face_wb_baro_first_order(m1, c0, phi(b, i, j-1), phi(b, i, j),gamma,e,l,r);
         else if(wb) reconstruct_face_wb_first_order(m1, c0, phi(b, i, j-1), phi(b, i, j), gamma, l, r);
         else reconstruct_face_first_order(m1, c0, l, r);
       } else if(baro){
@@ -115,7 +130,17 @@ void ComputeFluxes(Mesh& mesh, const View4D& U, Real gamma, const ReconOptions& 
       } else {
         reconstruct_face(m2, m1, c0, p1, block_dx2(b), gamma, opt, l, r);
       }
-      const Vec4 flux = FluxhllcY(l, r, gamma);
+      Vec4 flux = FluxhllcY(l, r, gamma);
+      //Hydrostatic wall: mirror-state Riemann problem, as for the x-faces
+      if(nw && ((f == 0 && walls(b, 2)) || (f == nx2 && walls(b, 3)))){
+        const Vec4 in = (f == 0) ? r : l;
+        Vec4 mir = in;
+        mir[IM2] = -in[IM2];
+        flux = (f == 0) ? FluxhllcY(mir, in, gamma) : FluxhllcY(in, mir, gamma);
+        flux[IDN] = 0.0;
+        flux[IM1] = 0.0;
+        flux[IEN] = 0.0;
+      }
       for(size_t k = 0; k < NVAR; ++k) fy(b, ii, f, k) = flux[k];
       //flux register (refluxing at refinement boundaries):
       //with well-balancing it stores the momentum

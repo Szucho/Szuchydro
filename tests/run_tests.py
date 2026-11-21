@@ -32,6 +32,8 @@ Physics problems checks:
     amr_crit_vorticity  the vorticity criterion refines the vortex centre, not the far field
     amr_crit_hook       the problem's geometry hook refines exactly its region
     invalid_amr_criterion  unknown criterion, contrast without well_balanced, hook without a hook: Parameter error
+    hydrostatic_wall_mass_pm/_poly/_atm  pulses hitting Hydrostatic walls: mass exactly conserved (wall flux)
+    hydrostatic_wall_reflection  without gravity a Hydrostatic wall reflects like a Closed wall
     nowb_isothermal     well_balanced 0: must drift (the switch matters)
     wb_harmonic_axes    harmonic potential along y and x: at rest, x == transposed y (all 4 walls)
     wb_perturbation     a 1e-6 pressure pulse propagates; the far field stays at round-off
@@ -595,6 +597,37 @@ def test_invalid_amr_criterion(exe, workdir):
         res.check(f"'Parameter error' message ({crit})", int(found), found, "= 1")
     return res
 
+def wall_speed(frame, gamma):
+    """Largest |v|/c_s in the outermost two cell rows/columns: proves a pulse really reached the walls."""
+    x, y, Q = stitch(frame)
+    rho, u, v, p = primitives(Q, gamma)
+    m = np.hypot(u, v)/np.sqrt(gamma*p/rho)
+    return float(max(m[:2, :].max(), m[-2:, :].max(), m[:, :2].max(), m[:, -2:].max()))
+
+
+def test_hydrostatic_wall_reflection(exe, workdir):
+    """Without gravity a Hydrostatic wall is a reflecting wall like Closed (they differ only in the second
+    ghost layer): the reflected pulse must agree to 1e-3 of its amplitude. A wall flux that ignored the
+    velocity into the wall (pressure only) would differ at the percent level."""
+    name = "hydrostatic_wall_reflection"
+    res = Result(name)
+    res.runtime, res.outdir = 0.0, None
+    vel = {}
+    for wall in ["Hydrostatic", "Closed"]:
+        code, log, dt, outdir = run_variant(exe, name, [f"bc_bottom {wall}", f"bc_top {wall}"], workdir)
+        res.runtime += dt
+        res.check(f"exit code ({wall})", code, code == 0, "= 0")
+        if code != 0:
+            res.log_tail = "\n".join(log.replace("\r", "\n").splitlines()[-15:])
+            return res
+        x, y, Q = stitch(read_frames(os.path.join(outdir, "grid.bin"))[-1])
+        rho, u, v, p = primitives(Q, 1.4)
+        vel[wall] = (u, v)
+    du = np.hypot(vel["Hydrostatic"][0] - vel["Closed"][0], vel["Hydrostatic"][1] - vel["Closed"][1]).max()
+    amp = np.hypot(*vel["Closed"]).max()
+    res.check("max |v_Hydrostatic - v_Closed| / max |v|", du/amp, du/amp < 1e-3, "< 1e-3")
+    return res
+
 def test_outflow_walls(exe, workdir):
     """gas streams towards each wall in turn (cases outflow_left/right/bottom/top), with Outflow
     on both walls of that direction: one wall lets the gas leave, the other must block inflow.
@@ -676,6 +709,8 @@ def test_case(exe, name, workdir):
         return test_convergence(exe, name, workdir,
                                 {"euler": (0.0, 1.2), "vl2": (1.8, 2.3), "rk2": (1.8, 2.3)},
                                 [("vl2", 0.5), ("rk2", 0.5)])
+    if name == "hydrostatic_wall_reflection":
+        return test_hydrostatic_wall_reflection(exe, workdir)
     if name == "amr_criterion_select":
         return test_amr_criterion_select(exe, workdir)
     if name == "invalid_amr_criterion":
@@ -792,6 +827,11 @@ def test_case(exe, name, workdir):
         res.check("AMR refines the pulse (max level)", lv, lv >= 1, ">= 1")
         done = "reference equilibrium re-captured" in log
         res.check("the reset happened", int(done), done, "= 1")
+    elif name in ("hydrostatic_wall_mass_pm", "hydrostatic_wall_mass_poly", "hydrostatic_wall_mass_atm"):
+        dm = abs(totals(frames[-1])[0]/totals(frames[0])[0] - 1)
+        res.check("mass conservation |dM|/M", dm, dm < 1e-13, "< 1e-13")
+        ws = max(wall_speed(f, gamma) for f in frames)
+        res.check("the pulse reached the walls: max |v|/cs next to them", ws, ws > 1e-5, "> 1e-5")
     elif name == "amr_crit_vorticity":
         blocks = frames[-1][1]
         cx, cy = 0.1, 0.1  # vortex centre at t = 0.1 (starts at the origin, advected with u0 = v0 = 1)
@@ -914,7 +954,8 @@ ALL = ["sod_uniform", "sod_smr", "sod_amr", "sod_amr_level2",
        "wb_smr_hband", "wb_smr_vband", "wb_smr_tjump", "wb_smr_nested", "wb_smr_pointmass",
        "wb_smr_integrators", "wb_smr_pulse", "wb_amr_rest", "wb_amr_pulse", "wb_amr_reset_pulse",
        "wb_reset_smr", "wb_reset_pointmass", "wb_amr_refcheck", "amr_criterion_select",
-       "amr_crit_vorticity", "amr_crit_hook", "invalid_amr_criterion"]
+       "amr_crit_vorticity", "amr_crit_hook", "invalid_amr_criterion", "hydrostatic_wall_mass_pm",
+       "hydrostatic_wall_mass_poly", "hydrostatic_wall_mass_atm", "hydrostatic_wall_reflection"]
 
 def main():
     ap = argparse.ArgumentParser(description="Szuchydro test suite")
