@@ -1,3 +1,4 @@
+//includes needed
 #include <cmath>
 #include <exception>
 #include <iomanip>
@@ -11,6 +12,7 @@
 #include <Kokkos_Core.hpp>
 #include <memory>
 
+//hpp files written by me
 #include "core/hydro_config.hpp"
 #include "bvals/bvals.hpp"
 #include "mesh/mesh.hpp"
@@ -22,6 +24,7 @@
 #include "solver/time_integrator.hpp"
 #include "solver/potential.hpp"
 #include "solver/reference.hpp"
+#include "solver/diffusion.hpp"
 
 //CFL time step calculation (GPU/CPU parallel reduction)
 Real compute_cfl_dt(Mesh& mesh, Real gamma, Real cfl_max){
@@ -195,6 +198,11 @@ int main(int argc, char* argv[]){
 
     Mesh mesh(inputs);
     TimeIntegrator integrator(par.integrator, mesh.inputs()); //owns the face flux arrays
+    DiffusionCoeffs diff; //viscosity and conduction
+    diff.nu = par.viscosity_nu;
+    diff.nu_bulk = par.viscosity_bulk;
+    diff.chi = par.conduction_chi;
+    bool diffusion_limited = false; //which limit sets the time step (logged when it changes)
     mesh.BuildTree();
     mesh.CreateMeshBlocks();
     mesh.SetupNeighbors();
@@ -204,6 +212,9 @@ int main(int argc, char* argv[]){
     std::ofstream gridfile = openGridFile(par.outdir, mesh);
 
     std::cout << "Active leaf blocks created: " << mesh.num_active_blocks() << "\n";
+    //after the blocks exist the wall flags are per active block
+    if(diff.active()) integrator.set_diffusion(diff, ReflectingWallFlags(mesh, bc));
+
 
     //initial state + problem-specific extras for the time loop (src/pgen/)
     ProblemHooks hooks;
@@ -430,6 +441,9 @@ int main(int argc, char* argv[]){
 
           //map old states to new blocks (Direct, Prolongation, Restriction)
           mesh.TransferSolution(old_blocks, old_data);
+          if(diff.active()) integrator.set_diffusion(diff, ReflectingWallFlags(mesh, bc)); //blocks changed
+                                                                                           //need to reapply
+
 
           //map initial to new blocks ~> end regrid and compare new state to initial
           auto initial_into_next = [&](){
@@ -458,6 +472,16 @@ int main(int argc, char* argv[]){
           throw std::runtime_error("invalid time step dt = " + std::to_string(dt_cfl) +
                                   " at t = " + std::to_string(t) +
                                   ": the solution contains non-physical values (NaN, rho <= 0 or p <= 0)");
+        if(diff.active()){ //explicit diffusion: its own stability limit, the smaller step wins
+                           //the diffusive cfl is needed for stability, DO NOT TOUCH
+          const Real dt_diff = DiffusiveTimeStep(mesh, par.gamma, diff, par.cfl_diff);
+          if((dt_diff < dt_cfl) != diffusion_limited || n == 0){
+            diffusion_limited = dt_diff < dt_cfl;
+            std::cout << "\ntime step now limited by " << (diffusion_limited ? "diffusion" : "the CFL condition")
+                      << " at t = " << t << " (dt_cfl = " << dt_cfl << ", dt_diff = " << dt_diff << ")\n";
+          }
+          dt_cfl = std::min(dt_cfl, dt_diff);
+        }
         dt = std::min(dt_cfl, tf - t);
 
         draw_progress(t, n == 0);

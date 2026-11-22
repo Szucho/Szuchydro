@@ -33,6 +33,7 @@ void TimeIntegrator::step(Mesh& mesh, Real dt, Real gamma, const ReconOptions& r
     View4D U    = mesh.get_data_view();
     View4D Unew = mesh.get_data_next_view();
     ComputeFluxes(mesh, U, gamma, recon, F_, phi_, well_balanced_, false, eq_, walls_);
+    if(diff_.active()) AddDiffusiveFluxes(mesh, U, gamma, diff_, F_, diff_walls_);
     ApplyFluxDivergence(mesh, U, Unew, F_, dt);
     add_sources(U, Unew, dt);
     mesh.swap_data_views();
@@ -44,6 +45,7 @@ void TimeIntegrator::step(Mesh& mesh, Real dt, Real gamma, const ReconOptions& r
     {
       View4D Un = mesh.get_data_view(), Us = mesh.get_data_next_view();
       ComputeFluxes(mesh, Un, gamma, recon, F_, phi_, well_balanced_, /*first_order=*/true, eq_, walls_);
+      if(diff_.active()) AddDiffusiveFluxes(mesh, Un, gamma, diff_, F_, diff_walls_);
       ApplyFluxDivergence(mesh, Un, Us, F_, 0.5*dt);
       add_sources(Un, Us, 0.5*dt);
     }
@@ -54,6 +56,7 @@ void TimeIntegrator::step(Mesh& mesh, Real dt, Real gamma, const ReconOptions& r
       View4D Us = mesh.get_data_view(), Un = mesh.get_data_next_view();
       ComputeFluxes(mesh, Us, gamma, recon, F_, phi_,
                     well_balanced_, false, eq_, walls_); //also fills the flux register
+      if(diff_.active()) AddDiffusiveFluxes(mesh, Us, gamma, diff_, F_, diff_walls_);
       ApplyFluxDivergence(mesh, Un, Un, F_, dt);
       add_sources(Us, Un, dt);
     }
@@ -70,6 +73,7 @@ void TimeIntegrator::step(Mesh& mesh, Real dt, Real gamma, const ReconOptions& r
   {
     View4D Un = mesh.get_data_view(), U1 = mesh.get_data_next_view();
     ComputeFluxes(mesh, Un, gamma, recon, F_, phi_, well_balanced_, false, eq_, walls_);
+    if(diff_.active()) AddDiffusiveFluxes(mesh, Un, gamma, diff_, F_, diff_walls_);
     ApplyFluxDivergence(mesh, Un, U1, F_, dt);
     add_sources(Un, U1, dt);
   }
@@ -80,6 +84,7 @@ void TimeIntegrator::step(Mesh& mesh, Real dt, Real gamma, const ReconOptions& r
   {
     View4D U1 = mesh.get_data_view(), Un = mesh.get_data_next_view();
     ComputeFluxes(mesh, U1, gamma, recon, F_, phi_, well_balanced_, false, eq_, walls_);
+    if(diff_.active()) AddDiffusiveFluxes(mesh, U1, gamma, diff_, F_, diff_walls_);
     CombineFluxDivergence(mesh, Un, U1, Un, F_, dt, 0.5, 0.5);
     add_sources(U1, Un, 0.5*dt);
   }

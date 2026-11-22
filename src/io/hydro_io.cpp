@@ -72,6 +72,16 @@ SimParams readParams(const std::string& filename){ //reads in params.txt
   p.n_frames = opti("n_frames", 100);
   p.use_amr  = opti("use_amr", 1) != 0;
   p.cfl      = optd("cfl", 0.4);
+  p.viscosity_nu = optd("viscosity_nu", 0.0);
+  p.viscosity_bulk = optd("viscosity_bulk", 0.0);
+  p.conduction_chi = optd("conduction_chi", 0.0);
+  if(p.viscosity_nu < 0.0 || p.viscosity_bulk < 0.0 || p.conduction_chi < 0.0)
+    throw std::runtime_error("Parameter error: viscosity_nu, viscosity_bulk and conduction_chi must be >= 0");
+  if(p.viscosity_nu > 0.0 || p.viscosity_bulk > 0.0 || p.conduction_chi > 0.0){ //read only with diffusion
+    p.cfl_diff = optd("cfl_diff", 0.5);
+    if(!(p.cfl_diff > 0.0 && p.cfl_diff <= 1.0))
+      throw std::runtime_error("Parameter error: cfl_diff must be in (0, 1]");
+  }
   p.max_blocks = opti("max_blocks", p.max_blocks);
   p.amr_max_level = opti("amr_max_level", p.amr_max_level);
   p.amr_interval = opti("amr_interval", p.amr_interval);

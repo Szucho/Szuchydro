@@ -34,6 +34,8 @@ Physics problems checks:
     invalid_amr_criterion  unknown criterion, contrast without well_balanced, hook without a hook: Parameter error
     hydrostatic_wall_mass_pm/_poly/_atm  pulses hitting Hydrostatic walls: mass exactly conserved (wall flux)
     hydrostatic_wall_reflection  without gravity a Hydrostatic wall reflects like a Closed wall
+    visc_* / cond_* / diffusion_*   viscosity (nu, nu_b) and conduction (chi): exact decay rates, free-slip and
+                                    insulating walls, convergence, conservation, refinement, well-balancing
     nowb_isothermal     well_balanced 0: must drift (the switch matters)
     wb_harmonic_axes    harmonic potential along y and x: at rest, x == transposed y (all 4 walls)
     wb_perturbation     a 1e-6 pressure pulse propagates; the far field stays at round-off
@@ -628,6 +630,128 @@ def test_hydrostatic_wall_reflection(exe, workdir):
     res.check("max |v_Hydrostatic - v_Closed| / max |v|", du/amp, du/amp < 1e-3, "< 1e-3")
     return res
 
+def mode_amplitude(frame, field, gamma, n=1, diag=False):
+    """Amplitude of the Fourier mode n of a field ('u', 'v', 'T' or 's' = p/rho^gamma) on the stitched
+    grid: along y (x-averaged), or along the diagonal (phase kx x + ky y) for the diagonal test modes.
+    Entropy modes are measured with 's': conduction launches weak sound waves, which carry adiabatic
+    temperature fluctuations but no entropy. Sound waves are measured with 'w+' = v + dp/(rho c): with
+    diffusion, the inviscid initial wave also seeds a small backward wave, whose beating would distort
+    a measurement of v."""
+    x, y, Q = stitch(frame)
+    rho, u, v, p = primitives(Q, gamma)
+    if field == "w+":  # forward acoustic characteristic: only the right-moving sound wave
+        f = v + (p - p.mean())/(rho.mean()*np.sqrt(gamma*p.mean()/rho.mean()))
+    else:
+        f = {"u": u, "v": v, "T": p/rho, "s": p/rho**gamma}[field]
+    f = f - f.mean()
+    lx = x[-1] - x[0] + (x[1] - x[0])
+    ly = y[-1] - y[0] + (y[1] - y[0])
+    x0 = x[0] - 0.5*(x[1] - x[0])
+    y0 = y[0] - 0.5*(y[1] - y[0])
+    X, Y = np.meshgrid(x - x0, y - y0, indexing="ij")
+    ph = 2.0*np.pi*n*(X/lx + Y/ly) if diag else 2.0*np.pi*n*Y/ly
+    return float(2.0*np.hypot((f*np.sin(ph)).mean(), (f*np.cos(ph)).mean()))
+
+
+def decay_rate(frames, field, gamma, n=1, diag=False):
+    """Exponential decay rate of a mode between the first and the last snapshot."""
+    a0 = mode_amplitude(frames[0], field, gamma, n, diag)
+    a1 = mode_amplitude(frames[-1], field, gamma, n, diag)
+    return float(-np.log(a1/a0)/(frames[-1][0] - frames[0][0]))
+
+
+def run_frames(exe, name, extra, workdir, res):
+    """Run a variant of a case; returns its frames, or None (with the failure recorded in res)."""
+    code, log, dt, outdir = run_variant(exe, name, extra, workdir)
+    res.runtime += dt
+    if code != 0:
+        res.check(f"exit code ({' '.join(extra)})", code, False, "= 0")
+        res.log_tail = "\n".join(log.replace("\r", "\n").splitlines()[-15:])
+        return None
+    return read_frames(os.path.join(outdir, "grid.bin"))
+
+
+def test_diffusion_convergence(exe, name, field, key, coeff, workdir):
+    """Convergence of a diagonal mode's decay rate at N = 16, 32, 64. A grid-oblique wave is also damped
+    by the hyperbolic scheme's own numerical dissipation, so at each resolution the inviscid (key = 0)
+    run's decay is subtracted; the remaining diffusive part must converge at >= 1.8 (Richardson, from
+    successive differences) and match the exact rate at N = 64. Block corners use one-sided tangential
+    differences, so this also checks that the global order stays near 2."""
+    res = Result(name)
+    res.runtime, res.outdir = 0.0, None
+    rates = []
+    for nres in [16, 32, 64]:
+        r = []
+        for c in [coeff, 0.0]:
+            frames = run_frames(exe, name, [f"Nx {nres}", f"Ny {nres}", f"{key} {c}"], workdir, res)
+            if frames is None:
+                return res
+            r.append(decay_rate(frames, field, 1.4, 1, diag=True))
+        rates.append(r[0] - r[1])
+    order = float(np.log2(abs(rates[0] - rates[1])/abs(rates[1] - rates[2])))
+    res.check("convergence order of the diffusive decay rate", order, order >= 1.8, ">= 1.8")
+    err = abs(rates[2]/(coeff*2.0*(2.0*np.pi)**2) - 1)
+    res.check("diffusive decay rate at N = 64 vs exact", err, err < 5e-3, "< 5e-3 (relative)")
+    return res
+
+
+def test_diffusion_sound_damping(exe, workdir):
+    """Sound-wave damping: inviscid run, then nu, nu_b and chi in turn. The extra damping over the
+    inviscid (numerical) one must match linear theory, k^2 (4/3 nu + nu_b + (gamma - 1) chi)/2."""
+    name = "diffusion_sound_damping"
+    res = Result(name)
+    res.runtime, res.outdir = 0.0, None
+    k2 = (2.0*np.pi)**2
+    frames = run_frames(exe, name, [], workdir, res)
+    if frames is None:
+        return res
+    base = decay_rate(frames, "w+", 1.4)
+    for extra, theory in [("viscosity_nu 0.01", 0.5*k2*4.0/3.0*0.01), ("viscosity_bulk 0.01", 0.5*k2*0.01),
+                          ("conduction_chi 0.01", 0.5*k2*0.4*0.01)]:
+        frames = run_frames(exe, name, [extra], workdir, res)
+        if frames is None:
+            return res
+        extra_rate = decay_rate(frames, "w+", 1.4) - base
+        err = abs(extra_rate/theory - 1)
+        res.check(f"damping from {extra.split()[0]} vs linear theory", err, err < 2e-2, "< 2e-2 (relative)")
+    return res
+
+
+def test_variants_rest(exe, name, variants, workdir, check):
+    """Run a case with several integrator variants; check(res, frames, label) records the checks."""
+    res = Result(name)
+    res.runtime, res.outdir = 0.0, None
+    for v in variants:
+        frames = run_frames(exe, name, [f"integrator {v}"], workdir, res)
+        if frames is None:
+            return res
+        check(res, frames, v)
+    return res
+
+
+def test_diffusion_wb_pulse(exe, workdir):
+    """The 1e-6 pulse on the balanced atmosphere with and without viscosity: the wave must be weaker
+    with nu, and the far field must stay at round-off (no spurious motion from the diffusive fluxes)."""
+    name = "diffusion_wb_pulse"
+    res = Result(name)
+    res.runtime, res.outdir = 0.0, None
+    wave = {}
+    for nu in ["0.01", "0.0"]:
+        frames = run_frames(exe, name, [f"viscosity_nu {nu}"], workdir, res)
+        if frames is None:
+            return res
+        x, y, Q = stitch(frames[-1])
+        rho, u, v, p = primitives(Q, 1.4)
+        X, Y = np.meshgrid(x, y, indexing="ij")
+        r = np.hypot(X - 1.0, Y - 2.0)
+        mach = np.hypot(u, v)/np.sqrt(1.4*p/rho)
+        wave[nu] = float(mach[r < 0.9].max())
+        if nu == "0.01":
+            far = float(mach[r > 1.7].max())  # viscosity widens the precursor tail slightly
+            res.check("far field with nu: max |v|/cs for r > 1.7", far, far < 1e-12, "< 1e-12")
+    res.check("wave with nu / without", wave["0.01"]/wave["0.0"], wave["0.01"] < wave["0.0"], "< 1")
+    return res
+
 def test_outflow_walls(exe, workdir):
     """gas streams towards each wall in turn (cases outflow_left/right/bottom/top), with Outflow
     on both walls of that direction: one wall lets the gas leave, the other must block inflow.
@@ -709,6 +833,26 @@ def test_case(exe, name, workdir):
         return test_convergence(exe, name, workdir,
                                 {"euler": (0.0, 1.2), "vl2": (1.8, 2.3), "rk2": (1.8, 2.3)},
                                 [("vl2", 0.5), ("rk2", 0.5)])
+    if name == "visc_convergence":
+        return test_diffusion_convergence(exe, name, "u", "viscosity_nu", 0.01, workdir)
+    if name == "cond_convergence":
+        return test_diffusion_convergence(exe, name, "s", "conduction_chi", 0.01, workdir)
+    if name == "diffusion_sound_damping":
+        return test_diffusion_sound_damping(exe, workdir)
+    if name == "diffusion_wb_pulse":
+        return test_diffusion_wb_pulse(exe, workdir)
+    if name == "visc_integrators":
+        def chk(res, frames, v):
+            err = abs(decay_rate(frames, "u", 1.4)/(0.01*(2.0*np.pi)**2) - 1)
+            res.check(f"shear decay rate vs exp(-nu k^2 t) ({v})", err, err < 5e-3, "< 5e-3 (relative)")
+        return test_variants_rest(exe, name, ["euler", "rk2"], workdir, chk)
+    if name == "diffusion_wb_integrators":
+        def chk(res, frames, v):
+            x, y, Q = stitch(frames[-1])
+            rho, u, v_, p = primitives(Q, 1.4)
+            mach = float(np.max(np.hypot(u, v_)/np.sqrt(1.4*p/rho)))
+            res.check(f"max |v|/cs ({v})", mach, mach < 1e-12, "< 1e-12")
+        return test_variants_rest(exe, name, ["euler", "rk2"], workdir, chk)
     if name == "hydrostatic_wall_reflection":
         return test_hydrostatic_wall_reflection(exe, workdir)
     if name == "amr_criterion_select":
@@ -827,6 +971,83 @@ def test_case(exe, name, workdir):
         res.check("AMR refines the pulse (max level)", lv, lv >= 1, ">= 1")
         done = "reference equilibrium re-captured" in log
         res.check("the reset happened", int(done), done, "= 1")
+    elif name in ("visc_shear_decay", "visc_shear_walls", "visc_dt_limited"):
+        nu = 0.2 if name == "visc_dt_limited" else 0.01  # as in the case files
+        err = abs(decay_rate(frames, "u", gamma)/(nu*(2.0*np.pi)**2) - 1)
+        tol = 1e-2 if name == "visc_dt_limited" else 5e-3
+        res.check("shear decay rate vs exp(-nu k^2 t)", err, err < tol, f"< {tol:g} (relative)")
+        if name == "visc_dt_limited":
+            found = "limited by diffusion" in log
+            res.check("log reports the diffusive time-step limit", int(found), found, "= 1")
+    elif name == "visc_heating":
+        # heating rate mu (du/dy)^2 = rho nu A^2 k^2 cos^2(ky) e^(-2 nu k^2 t): its cos(2ky) part, integrated
+        def eint_cos2(f):
+            x, y, Q = stitch(f)
+            rho, u, v, p = primitives(Q, gamma)
+            e = (p/(gamma - 1.0)).mean(axis=0)
+            ph = 2.0*np.pi*(y - y[0] + 0.5*(y[1] - y[0]))/(y[-1] - y[0] + (y[1] - y[0]))
+            return 2.0*float((e*np.cos(2.0*ph)).mean())
+        nu, k, a = 0.01, 2.0*np.pi, 0.1*np.sqrt(gamma)
+        t = frames[-1][0]
+        pred = 0.5*nu*a*a*k*k*(1.0 - np.exp(-2.0*nu*k*k*t))/(2.0*nu*k*k)
+        q = (eint_cos2(frames[-1]) - eint_cos2(frames[0]))/pred
+        res.check("viscous heating pattern: measured / predicted cos(2ky) amplitude", q, 0.8<q< 1.2, "in (0.8, 1.2)")
+    elif name in ("cond_entropy_mode", "cond_walls"):
+        err = abs(decay_rate(frames, "s", gamma)/(0.01*(2.0*np.pi)**2) - 1)
+        res.check("entropy-mode decay rate vs exp(-chi k^2 t)", err, err < 5e-3, "< 5e-3 (relative)")
+        if name == "cond_walls":
+            de = abs(totals(frames[-1])[3]/totals(frames[0])[3] - 1)
+            res.check("total energy conserved (insulating walls)", de, de < 1e-12, "< 1e-12")
+    elif name in ("diffusion_conservation", "diffusion_smr"):
+        t0, t1 = totals(frames[0]), totals(frames[-1])
+        for k, label in [(0, "mass"), (3, "energy")]:
+            d = abs(t1[k]/t0[k] - 1)
+            res.check(f"{label} conservation |dQ|/Q", d, d < 1e-12, "< 1e-12")
+        scale = abs(t0[0])*np.sqrt(1.4)
+        for k, label in [(1, "x-momentum"), (2, "y-momentum")]:
+            d = abs(t1[k] - t0[k])/max(abs(t0[k]), scale)
+            res.check(f"{label} conservation", d, d < 1e-12, "< 1e-12 (relative)")
+        if name == "diffusion_conservation":
+            # conservation alone would also pass if the diffusion did nothing: its kinetic-energy loss
+            # (viscous dissipation into heat) must clearly exceed the scheme's own, from an inviscid run
+            def vortex_ke(f):
+                x, y, Q = stitch(f)
+                rho, u, v, p = primitives(Q, gamma)
+                return float((0.5*rho*((u - u.mean())**2 + (v - v.mean())**2)).sum())
+            loss = 1.0 - vortex_ke(frames[-1])/vortex_ke(frames[0])
+            code0, log0, dt0, out0 = run_variant(exe, name, ["viscosity_nu 0", "viscosity_bulk 0", "conduction_chi 0"], workdir)
+            f0 = read_frames(os.path.join(out0, "grid.bin"))
+            loss0 = 1.0 - vortex_ke(f0[-1])/vortex_ke(f0[0])
+            res.check("kinetic-energy loss with diffusion minus without", loss - loss0, loss - loss0 > 1e-2, "> 1e-2")
+        if name == "diffusion_smr":
+            err = abs(decay_rate(frames, "u", gamma)/(0.01*(2.0*np.pi)**2) - 1)
+            res.check("shear decay rate with a refined band", err, err < 1e-2, "< 1e-2 (relative)")
+            lv = max(b[0] for b in frames[-1][1])
+            res.check("refined blocks present (max level)", lv, lv >= 1, ">= 1")
+    elif name in ("diffusion_wb_rest", "diffusion_wb_tjump", "diffusion_wb_pointmass_iso",
+                  "diffusion_wb_pointmass_poly", "diffusion_wb_smr", "diffusion_wb_amr"):
+        if name == "diffusion_wb_amr":
+            lv = max(max(b[0] for b in f[1]) for f in frames)
+            res.check("nothing refined at rest (max level, all snapshots)", lv, lv == 0, "= 0")
+            if lv != 0:
+                return res
+        atmosphere_rest(res, frames, gamma, 1e-12)
+    elif name == "diffusion_wb_tjump_cond":
+        x, y, Q0 = stitch(frames[0])
+        x, y, Q1 = stitch(frames[-1])
+        T0 = (primitives(Q0, gamma)[3]/Q0[0]).mean(axis=0)
+        rho1, u1, v1, p1 = primitives(Q1, gamma)
+        T1 = (p1/rho1).mean(axis=0)
+        jump = y[int(np.argmax(np.abs(np.gradient(T0))))]
+        dT = float(np.max(np.abs(T1/T0 - 1)))
+        res.check("heat flows at the jump: max |dT/T|", dT, dT > 1e-4, "> 1e-4")
+        dm = abs(totals(frames[-1])[0]/totals(frames[0])[0] - 1)
+        res.check("mass conservation |dM|/M", dm, dm < 1e-12, "< 1e-12")
+        mach = np.hypot(u1, v1)/np.sqrt(gamma*p1/rho1)
+        # beyond the sound waves from the jump (~0.2) and the scheme's exponential precursor tail
+        far = float(mach[:, np.abs(y - jump) > 1.3].max())
+        res.check("far from the jump (|y - y_jump| > 1.3): max |v|/cs", far, far < 1e-12, "< 1e-12")
+
     elif name in ("hydrostatic_wall_mass_pm", "hydrostatic_wall_mass_poly", "hydrostatic_wall_mass_atm"):
         dm = abs(totals(frames[-1])[0]/totals(frames[0])[0] - 1)
         res.check("mass conservation |dM|/M", dm, dm < 1e-13, "< 1e-13")
@@ -955,7 +1176,13 @@ ALL = ["sod_uniform", "sod_smr", "sod_amr", "sod_amr_level2",
        "wb_smr_integrators", "wb_smr_pulse", "wb_amr_rest", "wb_amr_pulse", "wb_amr_reset_pulse",
        "wb_reset_smr", "wb_reset_pointmass", "wb_amr_refcheck", "amr_criterion_select",
        "amr_crit_vorticity", "amr_crit_hook", "invalid_amr_criterion", "hydrostatic_wall_mass_pm",
-       "hydrostatic_wall_mass_poly", "hydrostatic_wall_mass_atm", "hydrostatic_wall_reflection"]
+       "hydrostatic_wall_mass_poly", "hydrostatic_wall_mass_atm", "hydrostatic_wall_reflection",
+       "visc_shear_decay", "visc_shear_walls", "visc_convergence", "diffusion_sound_damping",
+       "visc_integrators", "visc_dt_limited", "cond_entropy_mode", "cond_walls",
+       "cond_convergence", "diffusion_conservation", "diffusion_smr", "diffusion_wb_rest",
+       "diffusion_wb_tjump", "diffusion_wb_tjump_cond", "diffusion_wb_pointmass_iso", "diffusion_wb_pointmass_poly",
+       "diffusion_wb_smr", "diffusion_wb_amr", "diffusion_wb_pulse", "diffusion_wb_integrators", "visc_heating"]
+
 
 def main():
     ap = argparse.ArgumentParser(description="Szuchydro test suite")

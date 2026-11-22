@@ -6,6 +6,7 @@
 #include "mesh/mesh.hpp"
 #include "hydro/reconstruction.hpp"
 #include "solver/rhs.hpp"
+#include "solver/diffusion.hpp"
 #include "solver/potential.hpp"
 
 /*
@@ -38,11 +39,13 @@ class TimeIntegrator{
   private:
     std::string name_;
     FaceFluxes F_;
-    View3D phi_; //defaults to empty = no external potential field
-    bool well_balanced_ = false;
-    WBEquilibrium eq_; //equilibrium family of the well-balanced scheme
-    WallFlags walls_; //Hydrostatic walls: reflecting-wall flux in ComputeFluxes
-    View4D flux_reg_saved_; //rk2: block-edge fluxes of stage 1 
+    View3D phi_;                 //defaults to empty = no external potential field
+    bool well_balanced_ = false; //flag for well-balanced method
+    WBEquilibrium eq_;           //equilibrium family of the well-balanced scheme
+    WallFlags walls_;            //Hydrostatic walls: reflecting-wall flux in ComputeFluxes
+    DiffusionCoeffs diff_;       //viscosity and conduction (M3-T.1)
+    WallFlags diff_walls_;       //reflecting walls: no diffusive flux crosses them
+    View4D flux_reg_saved_;      //rk2: block-edge fluxes of stage 1 
   
   public:
     //"Parameter error" for unkown name 
@@ -60,6 +63,7 @@ class TimeIntegrator{
     //external potential (tabulated by PotentialField):
     //its source is part of L(U), evaluated from the stage like the fluxes.
     //well balanced selects the hydrostatic reconstruction
+    void set_diffusion(const DiffusionCoeffs& d, const WallFlags& walls){ diff_ = d; diff_walls_ = walls; }
     void set_walls(const WallFlags& walls){ walls_ = walls; } //after setup and after every regrid
     void set_potential(const View3D& phi, bool well_balanced, const WBEquilibrium& eq = WBEquilibrium()){
       phi_ = phi; well_balanced_ = well_balanced; eq_ = eq;

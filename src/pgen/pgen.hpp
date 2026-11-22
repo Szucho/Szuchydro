@@ -76,5 +76,7 @@ void ProblemAtmosphere (Mesh& mesh, const SimParams& par, ProblemHooks& hooks); 
 void ProblemAdvect (Mesh& mesh, const SimParams& par, ProblemHooks& hooks); //advect.cpp
 void ProblemVortex (Mesh& mesh, const SimParams& par, ProblemHooks& hooks); //vortex.cpp
 void ProblemPointmass(Mesh& mesh, const SimParams& par, ProblemHooks& hooks); //pointmass.cpp
+void ProblemDiffusionTest(Mesh& mesh, const SimParams& par, ProblemHooks& hooks); //diffusion_test.cpp
+
 
 //list extra problems below this comment
