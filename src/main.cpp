@@ -20,6 +20,7 @@
 #include "hydro/slope_limiters.hpp"
 #include "hydro/reconstruction.hpp"
 #include "io/hydro_io.hpp"
+#include "io/history.hpp"
 #include "pgen/pgen.hpp"
 #include "solver/time_integrator.hpp"
 #include "solver/potential.hpp"
@@ -408,6 +409,9 @@ int main(int argc, char* argv[]){
     double cumulative_energy_loss = 0.0;
 
     try{
+      //history.hst (hist_interval): integrals every step, a line every hist_interval steps
+      HistoryRecorder history(par.outdir, par.hist_interval, par.gamma,
+                              par.viscosity_nu, par.viscosity_bulk, hooks.history);
       while(t < tf){
         if(use_reference && par.wb_reference_reset >= 0.0 && !reference.was_reset() && t >= par.wb_reference_reset){
           reference.reset(mesh, par.gamma, potential.view(), par.wb_eq);
@@ -466,6 +470,9 @@ int main(int argc, char* argv[]){
           apply_bcs();
         }
 
+        //history sample: after any regrid and its ghost exchange, the state writeFrame saves
+        if(history.active()) history.record(mesh, t, n%history.interval() == 0);
+
         //CFL every step (also right after regridding!!! OTHERWISE UNSTABLE, DO NOT REMOVE)
         Real dt_cfl = compute_cfl_dt(mesh, par.gamma, par.cfl);
         if(!std::isfinite(dt_cfl) || dt_cfl <= 0.0) //a blown-up state would otherwise loop forever
@@ -510,6 +517,7 @@ int main(int argc, char* argv[]){
         t += dt;
       }
 
+      if(history.active()) history.record(mesh, t, true); //final state hst sample
       writeFrame(gridfile, mesh, t);
       gridfile.flush();
       draw_progress(tf, true);

@@ -14,6 +14,7 @@
    entropy_cos  T = T0 (1 + A cos(k y))                the mode that fits insulating walls in y
    entropy_diag T = T0 (1 + A sin(kx x + ky y))
    sound        an acoustic wave travelling in +y      decays as exp(-k^2 (4/3 nu + nu_b + (gamma - 1)chi) t/2)
+   sound_standing  the same perturbation at rest       a standing wave: kinetic and internal energy slosh
  A is relative to the sound speed for velocities, and relative for T.
 */
 
@@ -26,7 +27,7 @@ void ProblemDiffusionTest(Mesh& mesh, const SimParams& par, ProblemHooks&){
   const int n = (int)s.get_real("diff_n", 1.0);
   const std::string mode = s.get("diff_mode", "shear");
   const bool ok = mode == "shear" || mode == "shear_cos" || mode == "shear_diag" || mode == "entropy" ||
-                  mode == "entropy_cos" || mode == "entropy_diag" || mode == "sound";
+                  mode == "entropy_cos" || mode == "entropy_diag" || mode == "sound" || mode == "sound_standing";
   if(!ok) throw std::runtime_error("Parameter error: unknown diff_mode '" + mode + "'");
   const Real T0 = p0/rho0, cs = std::sqrt(gamma*T0);
   const Real kx = 2.0*M_PI*n/(par.xmax - par.xmin), ky = 2.0*M_PI*n/(par.ymax - par.ymin);
@@ -52,6 +53,11 @@ void ProblemDiffusionTest(Mesh& mesh, const SimParams& par, ProblemHooks&){
         if(mode == "shear_diag"){ u = A*cs*std::sin(ph); v = -(kx/ky)*u; }
         if(mode == "entropy" || mode == "entropy_diag") rho = p0/(T0*(1.0 + A*std::sin(ph)));
         if(mode == "entropy_cos") rho = p0/(T0*(1.0 + A*std::cos(ph)));
+        if(mode == "sound_standing"){ //density/pressure mode at rest: two counter-propagating waves
+          const Real d = A*std::sin(ph);
+          rho = rho0*(1.0 + d);
+          p = p0*(1.0 + gamma*d);
+        }
         if(mode == "sound"){
           const Real d = A*std::sin(ph);
           rho = rho0*(1.0 + d);

@@ -38,6 +38,8 @@ Physics problems checks:
                                     insulating walls, convergence, conservation, refinement, well-balancing
     kol_*               Kolmogorov flow: laminar transient and steady state, momentum, cooling, heating,
                         instability, reproducibility, drag guard, energy budget, laminar u(a) scaling
+    hist_*              history output (history.hst): conservation, agreement with snapshots,
+                        interval independence, kinetic-energy budgets (viscous, pressure work, Kolmogorov)
     nowb_isothermal     well_balanced 0: must drift (the switch matters)
     wb_harmonic_axes    harmonic potential along y and x: at rest, x == transposed y (all 4 walls)
     wb_perturbation     a 1e-6 pressure pulse propagates; the far field stays at round-off
@@ -820,6 +822,38 @@ def test_kol_scaling_laminar(exe, workdir):
     res.check("exponent p of u_rms ~ a_rms^p (laminar)", p, abs(p - 1.0) < 1e-3, "1 +- 1e-3")
     return res
 
+def read_hist(outdir):
+    """history.hst of a run: column names (from the '#' header line) and the data as a dict of arrays."""
+    path = os.path.join(outdir, "history.hst")
+    names = None
+    with open(path) as f:
+        for line in f:
+            if line.startswith("#"):
+                names = line[1:].split()
+    data = np.atleast_2d(np.loadtxt(path))
+    return {n: data[:, k] for k, n in enumerate(names)}
+
+
+def test_hist_interval_independent(exe, workdir):
+    """Integrals are accumulated every step, independently of how often lines are written: the rows of
+    a run with hist_interval 10 must be bit-identical to the rows of hist_interval 1 at the same times."""
+    name = "hist_interval_independent"
+    res = Result(name)
+    res.runtime, res.outdir = 0.0, None
+    h = {}
+    for iv in [1, 10]:
+        code, log, dt, outdir = run_variant(exe, name, [f"hist_interval {iv}"], workdir)
+        res.runtime += dt
+        if code != 0:
+            res.check(f"exit code (hist_interval {iv})", code, False, "= 0")
+            return res
+        h[iv] = read_hist(outdir)
+    rows = [int(np.nonzero(h[1]["t"] == t)[0][0]) for t in h[10]["t"] if np.any(h[1]["t"] == t)]
+    res.check("rows of the sparse history found in the dense one", len(rows), len(rows) == len(h[10]["t"]), f"= {len(h[10]['t'])}")
+    worst = max(float(np.max(np.abs(h[10][c] - h[1][c][rows]))) for c in h[1])
+    res.check("max |difference| over all columns", worst, worst == 0.0, "= 0")
+    return res
+
 def test_outflow_walls(exe, workdir):
     """gas streams towards each wall in turn (cases outflow_left/right/bottom/top), with Outflow
     on both walls of that direction: one wall lets the gas leave, the other must block inflow.
@@ -901,6 +935,8 @@ def test_case(exe, name, workdir):
         return test_convergence(exe, name, workdir,
                                 {"euler": (0.0, 1.2), "vl2": (1.8, 2.3), "rk2": (1.8, 2.3)},
                                 [("vl2", 0.5), ("rk2", 0.5)])
+    if name == "hist_interval_independent":
+        return test_hist_interval_independent(exe, workdir)
     if name == "kol_instability":
         return test_kol_instability(exe, workdir)
     if name == "kol_reproducible":
@@ -1058,6 +1094,52 @@ def test_case(exe, name, workdir):
         if name == "visc_dt_limited":
             found = "limited by diffusion" in log
             res.check("log reports the diffusive time-step limit", int(found), found, "= 1")
+    elif name.startswith("hist_"):
+        h = read_hist(outdir)
+        res.check("history lines written", len(h["t"]), len(h["t"]) >= 2, ">= 2")
+        if name == "hist_conservation":
+            for c in ["mass", "Etot"]:
+                d = float(np.max(np.abs(h[c]/h[c][0] - 1.0)))
+                res.check(f"{c} column constant: max relative change", d, d < 1e-12, "< 1e-12")
+        elif name == "hist_matches_snapshots":
+            worst = 0.0
+            for fr in frames:
+                k = np.nonzero(h["t"] == fr[0])[0]
+                res.check(f"history line at snapshot t = {fr[0]:.4f}", len(k), len(k) == 1, "= 1")
+                if len(k) != 1:
+                    return res
+                tot = totals(fr)
+                ek = sum(float((0.5*(a[..., 1]**2 + a[..., 2]**2)/a[..., 0]).sum())*(b[4] - b[3])/b[7]*(b[6] - b[5])/b[8]
+                         for b, a in zip(fr[1], fr[2]))
+                for c, ref in [("mass", tot[0]), ("mx", tot[1]), ("my", tot[2]), ("Etot", tot[3]), ("Ekin", ek)]:
+                    worst = max(worst, abs(h[c][k[0]] - ref)/abs(ref))
+            res.check("history vs grid.bin integrals: max relative difference", worst, worst < 1e-12, "< 1e-12")
+        elif name == "hist_shear_decay":
+            dek = h["Ekin"][-1] - h["Ekin"][0]
+            q = abs(h["int_D_visc"][-1]/dek + 1.0)
+            res.check("int D_visc vs -(E_kin(t) - E_kin(0))", q, q < 1e-2, "< 1e-2 (relative)")
+            # D_visc uses central gradients, the solver's viscous operator compact face gradients: for
+            # u ~ sin(k y) their dissipation rates differ by (k dy)^2/4, which is exactly eps_num here
+            pred = (2.0*np.pi/64.0)**2/4.0
+            e = abs(h["eps_num"][-1]/dek)/pred
+            res.check("|eps_num/dE_kin| vs the stencil difference (k dy)^2/4", e, abs(e - 1.0) < 0.05, "1 +- 0.05")
+        elif name == "hist_pressure_work":
+            amp = float(np.max(np.abs(h["Ekin"] - h["Ekin"][0])))
+            res.check("kinetic energy oscillates: max |E_kin - E_kin0| / E_kin max", amp/float(np.max(h["Ekin"])),
+                      amp/float(np.max(h["Ekin"])) > 0.5, "> 0.5")
+            e = float(np.max(np.abs(h["eps_num"])))/amp
+            res.check("max |eps_num| / oscillation amplitude", e, e < 5e-3, "< 5e-3")  # 2.6e-3; 1.1e-2 with 1st-order time integrals
+        elif name == "hist_laminar_budget":
+            dek = h["Ekin"][-1] - h["Ekin"][0]
+            e = abs(h["eps_num"][-1]/dek)
+            # bounded by the central-vs-compact stencil difference (k dy)^2/4 = 2.4e-3 (see hist_shear_decay)
+            res.check("|eps_num| / kinetic-energy gain", e, e < 3e-3, "< 3e-3")
+        elif name == "hist_kolmogorov_eps":
+            m = h["t"] >= 24.0
+            ts = h["t"][m]
+            rate = (h["eps_num"][m][-1] - h["eps_num"][m][0])/(ts[-1] - ts[0])
+            q = rate/float(np.mean(h["P_force"][m]))
+            res.check("settled state: eps_num rate / forcing power", q, 0.05 < q < 0.3, "in (0.05, 0.3)")
     elif name in ("kol_laminar_transient", "kol_laminar_steady"):
         nu, al, f, k = 0.01, 0.1, 0.01, 2.0*np.pi
         uinf = f/(nu*k*k + al)
@@ -1335,7 +1417,9 @@ ALL = ["sod_uniform", "sod_smr", "sod_amr", "sod_amr_level2",
        "diffusion_wb_smr", "diffusion_wb_amr", "diffusion_wb_pulse", "diffusion_wb_integrators", "visc_heating",
        "kol_laminar_transient", "kol_laminar_steady", "kol_momentum", "kol_instability", "kol_cooling",
        "kol_heating_balance", "kol_reproducible", "kol_drag_guard", "invalid_kolmogorov", "kol_energy_budget",
-       "kol_scaling_laminar"]
+       "kol_scaling_laminar", "hist_conservation", "hist_matches_snapshots", "hist_interval_independent",
+       "hist_shear_decay", "hist_pressure_work", "hist_laminar_budget", "hist_kolmogorov_eps",
+       "invalid_hist_interval"]
 
 
 def main():

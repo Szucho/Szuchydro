@@ -75,6 +75,8 @@ SimParams readParams(const std::string& filename){ //reads in params.txt
   p.viscosity_nu = optd("viscosity_nu", 0.0);
   p.viscosity_bulk = optd("viscosity_bulk", 0.0);
   p.conduction_chi = optd("conduction_chi", 0.0);
+  p.hist_interval = opti("hist_interval", 0);
+  if(p.hist_interval < 0) throw std::runtime_error("Parameter error: hist_interval must be >= 0 (0 = no history)");
   if(p.viscosity_nu < 0.0 || p.viscosity_bulk < 0.0 || p.conduction_chi < 0.0)
     throw std::runtime_error("Parameter error: viscosity_nu, viscosity_bulk and conduction_chi must be >= 0");
   if(p.viscosity_nu > 0.0 || p.viscosity_bulk > 0.0 || p.conduction_chi > 0.0){ //read only with diffusion

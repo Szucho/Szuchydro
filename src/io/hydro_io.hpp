@@ -58,7 +58,7 @@ struct SimParams {
   //diffusion: kinematic shear and bulk viscosity, thermal diffusivity; 0 = off
   Real viscosity_nu = 0.0, viscosity_bulk = 0.0, conduction_chi = 0.0;
   Real cfl_diff = 0.5; //safety factor of the explicit diffusive time-step limit
-
+  int hist_interval = 0; //history.hst: a line every N steps (0 = no history file)
   //reconstruction: limiter (minmod, vanleer, superbee, mc) and variables (conserved, primitive)
   ReconOptions recon;
   //time integrator (euler, vl2, rk2), checked when integrator is created

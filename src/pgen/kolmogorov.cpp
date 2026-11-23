@@ -27,6 +27,8 @@
  kol_noise times the sound speed; kol_seed makes it reproducible on every compiler and device
  (raw std::mt19937_64 output is fixed by the C++ standard, the conversion to doubles is done here,
   also I had to practice with GCoL and Monte Carlo simulations in order to understand the random package T^T)
+ 
+ Added history output
 */
 void ProblemKolmogorov(Mesh& mesh, const SimParams& par, ProblemHooks& hooks){
   const ParamStore& s = par.store;
@@ -145,6 +147,34 @@ void ProblemKolmogorov(Mesh& mesh, const SimParams& par, ProblemHooks& hooks){
     if(alpha*dt > 0.5)
       throw std::runtime_error("kol_drag dt = " + std::to_string(alpha*dt) + " > 0.5: the drag is too strong for "
                                "its explicit integration; lower kol_drag or cfl (super-time-stepping)");
+  };
+  //history rates (hist_interval): forcing power, drag loss, cooling loss, volume integrated
+  hooks.history = [F, k, alpha, tau, T0, ymin](Mesh& m, Real gamma){
+    const int na = m.num_active_blocks();
+    const int g = m.inputs().nghost, nx1 = m.inputs().nx1_block, nx2 = m.inputs().nx2_block;
+    View4D U = m.get_data_view();
+    View1D bdx1 = m.get_block_dx1_view();
+    View1D bdx2 = m.get_block_dx2_view();
+    View1D bx2min("kol_hist_x2min", na);
+    auto hx = Kokkos::create_mirror_view(bx2min);
+    const auto& blocks = m.blocks();
+    for(int b = 0; b < na; ++b) hx(b) = blocks[b]->block_size.x2min;
+    Kokkos::deep_copy(bx2min, hx);
+    const Real gm1 = gamma - 1.0, inv_tau = (tau > 0.0) ? 1.0/tau : 0.0;
+    Real pf = 0.0, dd = 0.0, qc = 0.0;
+    Kokkos::parallel_reduce("KolmogorovHistory",
+      Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0, g, g}, {na, g + nx1, g + nx2}),
+      KOKKOS_LAMBDA(const int b, const int i, const int j, Real& p_f, Real& d_d, Real& q_c){
+        const Real dV = bdx1(b)*bdx2(b);
+        const Real y = bx2min(b) + (j - g + 0.5)*bdx2(b);
+        const Real rho = U(b, i, j, IDN), mx = U(b, i, j, IM1), my = U(b, i, j, IM2);
+        const Real ke = 0.5*(mx*mx + my*my)/rho;
+        const Real T = gm1*(U(b, i, j, IEN) - ke)/rho;
+        p_f += mx*F*Kokkos::sin(k*(y - ymin))*dV;
+        d_d += alpha*2.0*ke*dV;
+        q_c += rho*(T - T0)/gm1*inv_tau*dV;
+      }, pf, dd, qc);
+    return std::vector<HistoryTerm>{{"P_force", pf, 1}, {"D_drag", dd, -1}, {"Q_cool", qc, 0}};
   };
 
   //Newtonian cooling, exact factor once per step

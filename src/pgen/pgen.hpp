@@ -5,6 +5,7 @@
 #include "core/hydro_config.hpp"
 #include "mesh/mesh.hpp"
 #include "io/hydro_io.hpp"
+#include "io/history.hpp"
 #include "solver/time_integrator.hpp"
 #include "solver/potential.hpp"
 
@@ -46,7 +47,11 @@ struct ProblemHooks{
   //"amr_criterion hook": the problem decides refinement from a block's region,
   //level and the time return > 0 refine, < 0 derefine, 0 keep
   std::function<int(Real x1min, Real x1max, Real x2min, Real x2max, int level, Real t)> refine;
-
+  //history output (hist_interval): the problem's own volume-integrated rates 
+  //(forcing power, drag loss, cooling, ...) 
+  //with their role in the kinetic-energy budget; evaluated every step
+  HistoryHook history;
+ 
 };
 
 //the initial condition has to be set up
