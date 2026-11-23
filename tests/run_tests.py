@@ -36,6 +36,8 @@ Physics problems checks:
     hydrostatic_wall_reflection  without gravity a Hydrostatic wall reflects like a Closed wall
     visc_* / cond_* / diffusion_*   viscosity (nu, nu_b) and conduction (chi): exact decay rates, free-slip and
                                     insulating walls, convergence, conservation, refinement, well-balancing
+    kol_*               Kolmogorov flow: laminar transient and steady state, momentum, cooling, heating,
+                        instability, reproducibility, drag guard, energy budget, laminar u(a) scaling
     nowb_isothermal     well_balanced 0: must drift (the switch matters)
     wb_harmonic_axes    harmonic potential along y and x: at rest, x == transposed y (all 4 walls)
     wb_perturbation     a 1e-6 pressure pulse propagates; the far field stays at round-off
@@ -752,6 +754,72 @@ def test_diffusion_wb_pulse(exe, workdir):
     res.check("wave with nu / without", wave["0.01"]/wave["0.0"], wave["0.01"] < wave["0.0"], "< 1")
     return res
 
+def kol_amplitude(frame, gamma = 1.4):
+    """Amplitude of the sin(k y) mode (k = 2 pi / Ly) of the x-averaged x-velocity."""
+    x, y, Q = stitch(frame)
+    u = (Q[1]/Q[0]).mean(axis = 0)
+    ph = 2.0*np.pi*(y - y[0] + 0.5*(y[1] - y[0]))/(y[-1] - y[0] + (y[1] - y[0]))
+    return 2.0*float((u*np.sin(ph)).mean())
+
+
+def test_kol_instability(exe, workdir):
+    """Kolmogorov flow in an elongated box with a seeded perturbation: at Re = U/(nu k) = 5 (above the
+    critical ~sqrt(2)) the perturbation (v_rms) must grow by > 10x until t = 20, at Re = 0.5 it must decay."""
+    name = "kol_instability"
+    res = Result(name)
+    res.runtime, res.outdir = 0.0, None
+    for re_, f in [(5.0, 0.124025), (0.5, 0.0124025)]:
+        frames = run_frames(exe, name, [f"kol_F {f}"], workdir, res)
+        if frames is None:
+            return res
+        v0, v1 = [float(np.sqrt(np.mean((stitch(fr)[2][2]/stitch(fr)[2][0])**2))) for fr in (frames[0], frames[-1])]
+        if re_ > 1.0:
+            res.check("Re = 5: v_rms(t = 20) / v_rms(0)", v1/v0, v1/v0 > 10.0, "> 10")
+        else:
+            res.check("Re = 0.5: v_rms(t = 20) / v_rms(0)", v1/v0, v1/v0 < 1.0, "< 1")
+    return res
+
+
+def test_kol_reproducible(exe, workdir):
+    """The seeded perturbation: the same seed twice must give bit-identical results, another seed must not."""
+    name = "kol_reproducible"
+    res = Result(name)
+    res.runtime, res.outdir = 0.0, None
+    q = []
+    for extra in [[], [], ["kol_seed 4"]]:
+        frames = run_frames(exe, name, extra, workdir, res)
+        if frames is None:
+            return res
+        q.append(stitch(frames[-1])[2])
+    same = float(np.max(np.abs(q[0] - q[1])))
+    diff = float(np.max(np.abs(q[0] - q[2])))
+    res.check("same seed: max |difference|", same, same == 0.0, "= 0")
+    res.check("other seed: max |difference|", diff, diff > 1e-6, "> 1e-6")
+    return res
+
+
+def test_kol_scaling_laminar(exe, workdir):
+    """Laminar Kolmogorov flow at three forcing amplitudes, analysed with scripts/forcing_scaling.py
+    (steady-state u_rms, fit in log-log): in the laminar regime u_rms is proportional to a_rms, p = 1."""
+    name = "kol_scaling_laminar"
+    res = Result(name)
+    res.runtime, res.outdir = 0.0, None
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts"))
+    import forcing_scaling
+    forces, u, du = [0.005, 0.01, 0.02], [], []
+    for f in forces:
+        code, log, dt, outdir = run_variant(exe, name, [f"kol_F {f}"], workdir)
+        res.runtime += dt
+        if code != 0:
+            res.check(f"exit code (kol_F {f})", code, False, "= 0")
+            return res
+        m, sd, n = forcing_scaling.steady_u_rms(outdir)
+        u.append(m)
+        du.append(sd)
+    p, dp, c = forcing_scaling.fit_exponent(np.array(forces)/np.sqrt(2.0), u, du)
+    res.check("exponent p of u_rms ~ a_rms^p (laminar)", p, abs(p - 1.0) < 1e-3, "1 +- 1e-3")
+    return res
+
 def test_outflow_walls(exe, workdir):
     """gas streams towards each wall in turn (cases outflow_left/right/bottom/top), with Outflow
     on both walls of that direction: one wall lets the gas leave, the other must block inflow.
@@ -833,6 +901,12 @@ def test_case(exe, name, workdir):
         return test_convergence(exe, name, workdir,
                                 {"euler": (0.0, 1.2), "vl2": (1.8, 2.3), "rk2": (1.8, 2.3)},
                                 [("vl2", 0.5), ("rk2", 0.5)])
+    if name == "kol_instability":
+        return test_kol_instability(exe, workdir)
+    if name == "kol_reproducible":
+        return test_kol_reproducible(exe, workdir)
+    if name == "kol_scaling_laminar":
+        return test_kol_scaling_laminar(exe, workdir)
     if name == "visc_convergence":
         return test_diffusion_convergence(exe, name, "u", "viscosity_nu", 0.01, workdir)
     if name == "cond_convergence":
@@ -874,6 +948,11 @@ def test_case(exe, name, workdir):
     res.runtime = dt
     res.outdir = outdir
 
+    if name == "kol_drag_guard":  # must stop cleanly, naming the too-strong drag
+        res.check("non-zero exit code", code, code != 0, "!= 0")
+        found = "kol_drag dt" in log
+        res.check("message names the drag limit", int(found), found, "= 1")
+        return res
     if name.startswith("invalid_"): #these are supposed to fail
         res.check("non-zero exit code", code, code != 0, "!= 0")
         found = "Parameter error" in log
@@ -979,6 +1058,78 @@ def test_case(exe, name, workdir):
         if name == "visc_dt_limited":
             found = "limited by diffusion" in log
             res.check("log reports the diffusive time-step limit", int(found), found, "= 1")
+    elif name in ("kol_laminar_transient", "kol_laminar_steady"):
+        nu, al, f, k = 0.01, 0.1, 0.01, 2.0*np.pi
+        uinf = f/(nu*k*k + al)
+        if name == "kol_laminar_transient":
+            worst = max(abs(kol_amplitude(fr)/(uinf*(1.0 - np.exp(-(nu*k*k + al)*fr[0]))) - 1.0) for fr in frames[1:])
+            res.check("amplitude vs U (1 - exp(-(nu k^2 + alpha) t)), all snapshots",
+                      worst, worst < 1e-3, "< 1e-3 (relative)")
+            # total energy changes only by forcing work minus drag work (viscous heating stays inside):
+            # dE/dt = (rho/2)(F A - alpha A^2) per volume, A(t) = U (1 - exp(-lam t)), rho = 1, box area 1
+            lam = nu*k*k + al
+            tt = np.linspace(0.0, frames[-1][0], 4001)
+            amp = uinf*(1.0 - np.exp(-lam*tt))
+            trapezoid = getattr(np, "trapezoid", None) or np.trapz  # NumPy >= 2 renamed trapz
+            work = float(trapezoid(0.5*(f*amp - al*amp*amp), tt))
+            de = totals(frames[-1])[3] - totals(frames[0])[3]
+            res.check("total energy change vs forcing work - drag work",
+                      abs(de/work - 1.0), abs(de/work - 1.0) < 2e-3, "< 2e-3 (relative)")
+        else:
+            a1 = kol_amplitude(frames[-1])
+            err = abs(a1/uinf - 1.0)
+            res.check("amplitude vs the laminar U = F/(nu k^2 + alpha)", err, err < 1e-3, "< 1e-3 (relative)")
+            # forcing work and viscous heating vary along y (~cos^2 k y): without cooling the pressure
+            # differences drive a small transverse flow; it must stay far below the flow speed
+            vmax = float(np.max(np.abs(stitch(frames[-1])[2][2])))/uinf
+            res.check("transverse flow: max |rho v| / U", vmax, vmax < 1e-3, "< 1e-3")
+            # steady laminar flow: injection = friction + viscous loss exactly (no numerical dissipation
+            # of a stationary shear flow); the check's centred gradients differ from the face-based ones
+            # by ~(k dy)^2/6
+            x, y, Q = stitch(frames[-1])
+            rho, u, v, p = primitives(Q, gamma)
+            dy = y[1] - y[0]
+            a = f*np.sin(k*(y - y[0] + 0.5*dy))[None, :]
+            uy = (np.roll(u, -1, 1) - np.roll(u, 1, 1))/(2.0*dy)
+            inj = float((rho*u*a).mean())
+            loss = float((al*rho*u*u).mean() + (rho*nu*uy*uy).mean())
+            res.check("energy budget: (friction + viscous) / injection",
+                      loss/inj, abs(loss/inj - 1.0) < 1e-2, "1 +- 1e-2")
+    elif name == "kol_momentum":
+        t0_, t1_ = totals(frames[0]), totals(frames[-1])
+        err = abs(t1_[1]/t0_[1]/np.exp(-0.1*frames[-1][0]) - 1.0)
+        res.check("mean flow: Px(t)/Px(0) vs exp(-alpha t)", err, err < 1e-6, "< 1e-6 (relative)")
+        res.check("no y-momentum: |Py|/|Px(0)|", abs(t1_[2])/abs(t0_[1]), abs(t1_[2])/abs(t0_[1]) < 1e-12, "< 1e-12")
+    elif name == "kol_cooling":
+        x, y, Q = stitch(frames[-1])
+        rho, u, v, p = primitives(Q, gamma)
+        t = frames[-1][0]
+        err = float(np.max(np.abs((p/rho - 1.0)/np.exp(-t/1e-3) - 1.0)))
+        res.check("(T - T0)/(T_init - T0) vs exp(-t/tau), tau < dt", err, err < 1e-12, "< 1e-12")
+    elif name == "kol_heating_balance":
+        dev = max(float(np.max(np.abs(primitives(stitch(fr)[2], gamma)[3]/stitch(fr)[2][0] - 1.0))) for fr in frames)
+        res.check("max |T/T0 - 1| over all snapshots", dev, dev < 1e-5, "< 1e-5")
+    elif name == "kol_energy_budget":
+        # in the settled state: injection rho u.a = friction alpha rho |u|^2 + viscous tau:grad u + numerical
+        nu, al, f, k = 0.002, 0.1, 0.053687, 2.0*np.pi
+        def budget(fr):
+            x, y, Q = stitch(fr)
+            rho, u, v, p = primitives(Q, gamma)
+            dx, dy = x[1] - x[0], y[1] - y[0]
+            a = f*np.sin(k*(y - y[0] + 0.5*dy))[None, :]
+            ddx = lambda q: (np.roll(q, -1, 0) - np.roll(q, 1, 0))/(2.0*dx)
+            ddy = lambda q: (np.roll(q, -1, 1) - np.roll(q, 1, 1))/(2.0*dy)
+            ux, uy, vx, vy = ddx(u), ddy(u), ddx(v), ddy(v)
+            div = ux + vy
+            return (float((rho*u*a).mean()), float((al*rho*(u*u + v*v)).mean()),
+                    float((rho*nu*(2.0*(ux**2 + vy**2) + (uy + vx)**2 - 2.0/3.0*div**2)).mean()),
+                    float(np.sqrt(np.mean(v*v))/np.sqrt(np.mean(u*u + v*v))))
+        # settled non-laminar state: the remainder is the scheme's numerical dissipation (~13% here)
+        st = np.array([budget(fr) for fr in frames if fr[0] >= 24.0])
+        closure = (st[:, 1].mean() + st[:, 2].mean())/st[:, 0].mean()
+        res.check("settled state is non-laminar: v_rms/u_rms", float(st[:, 3].mean()), st[:, 3].mean() > 0.3, "> 0.3")
+        res.check("settled state: (friction + viscous) / injection", float(closure),
+                  0.8 < closure < 1.02, "in (0.8, 1.02)")
     elif name == "visc_heating":
         # heating rate mu (du/dy)^2 = rho nu A^2 k^2 cos^2(ky) e^(-2 nu k^2 t): its cos(2ky) part, integrated
         def eint_cos2(f):
@@ -1181,7 +1332,10 @@ ALL = ["sod_uniform", "sod_smr", "sod_amr", "sod_amr_level2",
        "visc_integrators", "visc_dt_limited", "cond_entropy_mode", "cond_walls",
        "cond_convergence", "diffusion_conservation", "diffusion_smr", "diffusion_wb_rest",
        "diffusion_wb_tjump", "diffusion_wb_tjump_cond", "diffusion_wb_pointmass_iso", "diffusion_wb_pointmass_poly",
-       "diffusion_wb_smr", "diffusion_wb_amr", "diffusion_wb_pulse", "diffusion_wb_integrators", "visc_heating"]
+       "diffusion_wb_smr", "diffusion_wb_amr", "diffusion_wb_pulse", "diffusion_wb_integrators", "visc_heating",
+       "kol_laminar_transient", "kol_laminar_steady", "kol_momentum", "kol_instability", "kol_cooling",
+       "kol_heating_balance", "kol_reproducible", "kol_drag_guard", "invalid_kolmogorov", "kol_energy_budget",
+       "kol_scaling_laminar"]
 
 
 def main():

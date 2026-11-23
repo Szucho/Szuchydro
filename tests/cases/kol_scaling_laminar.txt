@@ -1,0 +1,29 @@
+# Base case of kol_scaling_laminar: laminar Kolmogorov flow at three forcing amplitudes, analysed
+# with scripts/forcing_scaling.py: in the laminar regime u_rms is proportional to a_rms (exponent 1).
+nx1_block 16
+nx2_block 16
+Nt 1000
+t0 0.0
+xmin 0.0
+xmax 1.0
+ymin 0.0
+ymax 1.0
+Nx 16
+Ny 64
+gamma 1.4
+cfl 0.4
+use_amr 0
+bc_left Periodic
+bc_right Periodic
+bc_bottom Periodic
+bc_top Periodic
+gas_profile kolmogorov
+gas_rho0 1.0
+gas_p0 1.0
+viscosity_nu 0.01
+kol_drag 0.1
+kol_F 0.01
+kol_init laminar
+n_frames 4
+tf 2.0
+outdir kol_scaling_laminar_out

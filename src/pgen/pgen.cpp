@@ -15,6 +15,7 @@ static const ProblemEntry problems[] = {
   {"vortex",  ProblemVortex,  "isentropic vortex [Yee et al. 1999] (convergence test, vortex_* keys)"},
   {"pointmass", ProblemPointmass, "barotropic atmosphere around a softened point mass (2D potential; pm_* keys)"},
   {"diffusion_test", ProblemDiffusionTest, "1-mode shear/entropy/sound states for the diffusion tests (diff_* keys)"},
+  {"kolmogorov", ProblemKolmogorov, "forced Kolmogorov flow with drag and cooling (kol_* keys)"},
 };
 
 //here we find the problem we wish to solve

@@ -1,0 +1,29 @@
+# Uniform gas at 2 T0, no forcing, cooling time 1e-3 (shorter than the time step): T - T0 decays
+# exactly as exp(-t/tau) (exact factor).
+nx1_block 16
+nx2_block 16
+Nt 1000
+t0 0.0
+xmin 0.0
+xmax 1.0
+ymin 0.0
+ymax 1.0
+Nx 16
+Ny 64
+gamma 1.4
+cfl 0.4
+use_amr 0
+bc_left Periodic
+bc_right Periodic
+bc_bottom Periodic
+bc_top Periodic
+gas_profile kolmogorov
+gas_rho0 1.0
+kol_F 0.0
+gas_p0 2.0
+kol_T0 1.0
+kol_cool_tau 1e-3
+kol_init rest
+n_frames 1
+tf 0.004
+outdir kol_cooling_out

@@ -35,3 +35,5 @@ jobs:
 
       - name: Check spectrum script on synthetic fields
         run: python3 scripts/spectrum.py --selftest
+      - name: Forcing-scaling script self-test
+        run: python3 scripts/forcing_scaling.py --selftest
