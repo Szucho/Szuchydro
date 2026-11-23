@@ -18,14 +18,13 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from spectrum import read_frames
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-
 SCALE = 0.6
 FIGSIZE = (SCALE*8, SCALE*6)
 
 def save(fig, fname):
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
     fig.savefig(fname, dpi=300)
     fig.savefig(fname.with_suffix(".pdf"))
     plt.close(fig)
@@ -71,6 +70,10 @@ def fit_exponent(a, u, du):
 
 def plot(a, u, du, p, c, out):
     """log-log u_rms(a_rms) with error bars, the fit and the reference slopes 1 and 1/2."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    
     a, u = np.asarray(a), np.asarray(u)
     fig, ax = plt.subplots(figsize = FIGSIZE)
     ax.errorbar(a, u, yerr = du, fmt = "o", capsize = 3, label = "runs (mean +- std)")
