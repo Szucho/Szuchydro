@@ -40,6 +40,8 @@ Physics problems checks:
                         instability, reproducibility, drag guard, energy budget, laminar u(a) scaling
     hist_*              history output (history.hst): conservation, agreement with snapshots,
                         interval independence, kinetic-energy budgets (viscous, pressure work, Kolmogorov)
+    sts_*               RKL2 super-time-stepping (diffusion_integrator rkl2): decay rates, time order,
+                        stage counts, refinement, walls, well-balancing, integrators, drag
     nowb_isothermal     well_balanced 0: must drift (the switch matters)
     wb_harmonic_axes    harmonic potential along y and x: at rest, x == transposed y (all 4 walls)
     wb_perturbation     a 1e-6 pressure pulse propagates; the far field stays at round-off
@@ -854,6 +856,137 @@ def test_hist_interval_independent(exe, workdir):
     res.check("max |difference| over all columns", worst, worst == 0.0, "= 0")
     return res
 
+
+RKL2_STAGES = re.compile(r"rkl2: s = (\d+) stages per half step \(ratio ([0-9.eE+-]+)\)")
+
+
+def rkl2_stages_for(ratio):
+    """Smallest s >= 2 with (s^2 + s - 2)/4 >= ratio: the RKL2 stage count the code must choose."""
+    return max(2, int(np.ceil((-1.0 + np.sqrt(9.0 + 16.0*ratio))/2.0 - 1e-12)))
+
+
+def momentum_rate(frames):
+    """Decay rate of the total x-momentum between the first and the last snapshot."""
+    return float(-np.log(totals(frames[-1])[1]/totals(frames[0])[1])/(frames[-1][0] - frames[0][0]))
+
+
+def test_sts_pair(exe, name, variants, workdir, measure):
+    """Run a case with several extra-line variants and return (res, [measure(frames, log) per variant])."""
+    res = Result(name)
+    res.runtime, res.outdir = 0.0, None
+    vals = []
+    for extra in variants:
+        code, log, dt, outdir = run_variant(exe, name, extra, workdir)
+        res.runtime += dt
+        if code != 0:
+            res.check(f"exit code ({' '.join(extra) or 'base'})", code, False, "= 0")
+            res.log_tail = "\n".join(log.replace("\r", "\n").splitlines()[-15:])
+            return res, None
+        vals.append(measure(read_frames(os.path.join(outdir, "grid.bin")), log))
+    return res, vals
+
+
+def test_sts(exe, name, workdir):
+    """The composite RKL2 tests (several runs each)."""
+    k2 = (2.0*np.pi)**2
+    if name == "sts_matches_explicit":
+        res, r = test_sts_pair(exe, name, [["diffusion_integrator explicit"], []], workdir,
+                               lambda f, l: decay_rate(f, "u", 1.4))
+        if r:
+            d = abs(r[1]/r[0] - 1.0)
+            res.check("decay rate rkl2 / explicit - 1", d, d < 1e-3, "< 1e-3")
+        return res
+    if name == "sts_time_convergence":
+        res, r = test_sts_pair(exe, name, [["cfl 0.4"], ["cfl 0.2"], ["cfl 0.1"]], workdir,
+                               lambda f, l: decay_rate(f, "u", 1.4))
+        if r:
+            d1, d2 = abs(r[0] - r[1]), abs(r[1] - r[2])
+            order = float(np.log2(d1/d2)) if d1 > 0.0 and d2 > 0.0 else 0.0
+            res.check("order in time of the decay rate (RKL2)", order, order >= 1.8, ">= 1.8")
+        return res
+    if name == "sts_strang_order":
+        def amp(f, l):
+            return mode_amplitude(f[-1], "u", 1.4)
+        res, r = test_sts_pair(exe, name, [["diffusion_integrator explicit"], ["cfl 0.4"], ["cfl 0.2"]], workdir, amp)
+        if r:
+            e = [abs(a/r[0] - 1.0) for a in r[1:]]
+            res.check("steady amplitude rkl2 / explicit - 1 (cfl 0.4)", e[0], e[0] < 1e-4, "< 1e-4")
+            order = float(np.log2(e[0]/e[1])) if e[1] > 0.0 else 0.0
+            res.check("order in time of the splitting error", order, order >= 1.8, ">= 1.8")
+        return res
+    if name == "sts_sound_damping":
+        # the inviscid reference has nothing for rkl2 to integrate: run it explicit (identical without diffusion)
+        res, r = test_sts_pair(exe, name, [["diffusion_integrator explicit"],
+                                           ["viscosity_nu 0.01"], ["viscosity_bulk 0.01"],
+                                           ["conduction_chi 0.01"]],
+                               workdir, lambda f, l: decay_rate(f, "w+", 1.4))
+        if r:
+            for extra_rate, (key, th) in zip(r[1:], [("nu", 4.0/3.0), ("nu_b", 1.0), ("chi", 0.4)]):
+                err = abs((extra_rate - r[0])/(0.5*k2*th*0.01) - 1.0)
+                res.check(f"damping from {key} (rkl2) vs linear theory", err, err < 2e-2, "< 2e-2 (relative)")
+        return res
+    if name == "sts_walls":
+        # entropy variant: chi k / c_s ~ 0.1 keeps the isobaric decay law valid (cf. sts_entropy_mode)
+        res, r = test_sts_pair(exe, name, [[], ["diff_mode entropy_cos", "viscosity_nu 0", "conduction_chi 0.02", "Ny 256",
+                                                "tf 1.0"]], workdir,
+                               lambda f, l: tuple(decay_rate(f, fld, 1.4) if mode_amplitude(f[0], fld, 1.4) > 0.0
+                                              else float("nan") for fld in ("u", "s")) +
+                                        (abs(totals(f[-1])[3]/totals(f[0])[3] - 1.0),))
+        if r:
+            e1 = abs(r[0][0]/(0.4*k2) - 1.0)
+            res.check("shear mode between Closed walls: rate vs nu k^2 (free-slip)", e1, e1 < 5e-3, "< 5e-3 (relative)")
+            e2 = abs(r[1][1]/(0.02*k2) - 1.0)
+            res.check("entropy mode between Closed walls: rate vs chi k^2", e2, e2 < 5e-3, "< 5e-3 (relative)")
+            de = max(r[0][2], r[1][2])
+            res.check("total energy conserved (insulating walls)", de, de < 1e-12, "< 1e-12")
+        return res
+    if name == "sts_wb_rest":
+        res = Result(name)
+        res.runtime, res.outdir = 0.0, None
+        for case in ["diffusion_wb_rest", "diffusion_wb_tjump", "diffusion_wb_pointmass_iso", "diffusion_wb_smr",
+                     "diffusion_wb_amr"]:
+            code, log, dt, outdir = run_variant(exe, case, ["diffusion_integrator rkl2"], workdir)
+            res.runtime += dt
+            if code != 0:
+                res.check(f"exit code ({case})", code, False, "= 0")
+                res.log_tail = "\n".join(log.replace("\r", "\n").splitlines()[-15:])
+                return res
+            frames = read_frames(os.path.join(outdir, "grid.bin"))
+            lv = max(max(b[0] for b in f[1]) for f in frames)
+            x, y, Q = stitch(frames[-1])
+            rho, u, v, p = primitives(Q, 1.4)
+            mach = float(np.max(np.hypot(u, v)/np.sqrt(1.4*p/rho)))
+            res.check(f"{case}: max |v|/cs", mach, mach < 1e-12, "< 1e-12")
+            if case == "diffusion_wb_amr":
+                res.check(f"{case}: nothing refined (max level)", lv, lv == 0, "= 0")
+        return res
+    if name == "sts_integrators":
+        def chk(res, frames, v):
+            err = abs(decay_rate(frames, "u", 1.4)/(0.4*k2) - 1.0)
+            res.check(f"shear decay rate vs exp(-nu k^2 t) ({v})", err, err < 5e-3, "< 5e-3 (relative)")
+        return test_variants_rest(exe, name, ["euler", "rk2"], workdir, chk)
+    if name == "sts_drag_rate":
+        res, r = test_sts_pair(exe, name, [[], ["cfl 0.2"], ["cfl 0.1"]], workdir, lambda f, l: momentum_rate(f))
+        if r:
+            err = abs(r[0]/190.0 - 1.0)
+            res.check("drag rate at alpha dt ~ 1 vs alpha (RKL2 accuracy limit ~6%)", err, err < 0.1, "< 0.1 (relative)")
+            d1, d2 = abs(r[0] - r[1]), abs(r[1] - r[2])
+            order = float(np.log2(d1/d2)) if d1 > 0.0 and d2 > 0.0 else 0.0
+            res.check("order in time of the drag rate", order, order >= 1.8, ">= 1.8")
+        return res
+    if name == "invalid_sts":
+        res = Result(name)
+        res.runtime, res.outdir = 0.0, None
+        for extra in [["diffusion_integrator rk4"], ["viscosity_nu 0.01", "diffusion_integrator rkl2", "sts_max_stages 1"],
+                      ["diffusion_integrator rkl2"]]:
+            code, log, dt, outdir = run_variant(exe, name, extra, workdir)
+            res.runtime += dt
+            res.check(f"non-zero exit code ({' '.join(extra)})", code, code != 0, "!= 0")
+            found = "Parameter error" in log
+            res.check(f"'Parameter error' ({' '.join(extra)})", int(found), found, "= 1")
+        return res
+    return None
+
 def test_outflow_walls(exe, workdir):
     """gas streams towards each wall in turn (cases outflow_left/right/bottom/top), with Outflow
     on both walls of that direction: one wall lets the gas leave, the other must block inflow.
@@ -935,6 +1068,10 @@ def test_case(exe, name, workdir):
         return test_convergence(exe, name, workdir,
                                 {"euler": (0.0, 1.2), "vl2": (1.8, 2.3), "rk2": (1.8, 2.3)},
                                 [("vl2", 0.5), ("rk2", 0.5)])
+    if name in ("sts_matches_explicit", "sts_time_convergence",
+                "sts_strang_order", "sts_sound_damping", "sts_walls", "sts_wb_rest",
+                "sts_integrators", "sts_drag_rate", "invalid_sts"):
+        return test_sts(exe, name, workdir)
     if name == "hist_interval_independent":
         return test_hist_interval_independent(exe, workdir)
     if name == "kol_instability":
@@ -1094,6 +1231,71 @@ def test_case(exe, name, workdir):
         if name == "visc_dt_limited":
             found = "limited by diffusion" in log
             res.check("log reports the diffusive time-step limit", int(found), found, "= 1")
+    elif name.startswith("sts_"):
+        k2 = (2.0*np.pi)**2
+        stages = [(int(a), float(b)) for a, b in RKL2_STAGES.findall(log)]
+        if name in ("sts_shear_decay", "sts_entropy_mode", "sts_large_ratio", "sts_max_stages"):
+            coeff = {"sts_shear_decay": 0.4, "sts_entropy_mode": 0.02,
+                     "sts_large_ratio": 1.7, "sts_max_stages": 0.4}[name]
+            field = "s" if name == "sts_entropy_mode" else "u"
+            tol = 1e-2 if name == "sts_large_ratio" else 5e-3
+            err = abs(decay_rate(frames, field, gamma)/(coeff*k2) - 1.0)
+            res.check("decay rate vs exact (rkl2)", err, err < tol, f"< {tol:g} (relative)")
+            smax = max(sv for sv, _ in stages) if stages else 0
+            res.check("RKL2 stages used (max)", smax, smax > 2, "> 2")
+            if name == "sts_large_ratio":
+                rmax = max(rv for _, rv in stages) if stages else 0.0
+                res.check("largest ratio (dt/2)/dt_sts", rmax, rmax > 200.0, "> 200")
+            if name == "sts_max_stages":
+                res.check("at most sts_max_stages = 5 stages", smax, smax <= 5, "<= 5")
+                found = "limited by sts_max_stages" in log
+                res.check("log reports the shortened step", int(found), found, "= 1")
+        elif name == "sts_stage_count":
+            res.check("stage-count lines logged", len(stages), len(stages) >= 1, ">= 1")
+            bad = sum(1 for sv, rv in stages if sv != rkl2_stages_for(rv))
+            res.check("stage counts not matching (s^2 + s - 2)/4 >= ratio", bad, bad == 0, "= 0")
+        elif name in ("sts_conservation", "sts_smr", "sts_amr"):
+            t0, t1 = totals(frames[0]), totals(frames[-1])
+            for k, label in [(0, "mass"), (3, "energy")]:
+                d = abs(t1[k]/t0[k] - 1)
+                res.check(f"{label} conservation |dQ|/Q", d, d < 1e-12, "< 1e-12")
+            scale = abs(t0[0])*np.sqrt(1.4)
+            for k, label in [(1, "x-momentum"), (2, "y-momentum")]:
+                d = abs(t1[k] - t0[k])/max(abs(t0[k]), scale)
+                res.check(f"{label} conservation", d, d < 1e-12, "< 1e-12 (relative)")
+            if name == "sts_smr":
+                err = abs(decay_rate(frames, "u", gamma)/(0.1*k2) - 1)
+                res.check("shear decay rate with a refined band", err, err < 1e-2, "< 1e-2 (relative)")
+                lv = max(b[0] for b in frames[-1][1])
+                res.check("refined blocks present (max level)", lv, lv >= 1, ">= 1")
+            if name == "sts_amr":
+                lv = max(max(b[0] for b in f[1]) for f in frames)
+                res.check("AMR refined (max level over snapshots)", lv, lv >= 1, ">= 1")
+            if name in ("sts_smr", "sts_amr", "sts_conservation"):
+                smax = max(sv for sv, _ in stages) if stages else 0
+                res.check("RKL2 stages used (max)", smax, smax >= 2, ">= 2")
+            if name == "sts_conservation":
+                def vortex_ke(f):
+                    x, y, Q = stitch(f)
+                    rho, u, v, p = primitives(Q, gamma)
+                    return float((0.5*rho*((u - u.mean())**2 + (v - v.mean())**2)).sum())
+                loss = 1.0 - vortex_ke(frames[-1])/vortex_ke(frames[0])
+                code0, log0, dt0, out0 = run_variant(exe, name, ["viscosity_nu 0", "viscosity_bulk 0",
+                                                                 "conduction_chi 0", "diffusion_integrator explicit"],
+                                                     workdir)
+                f0 = read_frames(os.path.join(out0, "grid.bin"))
+                loss0 = 1.0 - vortex_ke(f0[-1])/vortex_ke(f0[0])
+                res.check("kinetic-energy loss with diffusion minus without", loss - loss0,
+                          loss - loss0 > 1e-2, "> 1e-2")
+        elif name == "sts_drag_stiff":
+            px = [totals(f)[1] for f in frames]
+            res.check("momentum damped: |Px(end)/Px(0)|", abs(px[-1]/px[0]), abs(px[-1]/px[0]) < 1e-6, "< 1e-6")
+            neg = sum(1 for v in px if v < 0.0)
+            res.check("snapshots with negative Px (sign oscillation)", neg, neg == 0, "= 0")
+        elif name == "sts_drag_kolmogorov":
+            nu, al, f, k = 0.01, 0.1, 0.01, 2.0*np.pi
+            err = abs(kol_amplitude(frames[-1])/(f/(nu*k*k + al)) - 1.0)
+            res.check("laminar amplitude vs F/(nu k^2 + alpha) (rkl2)", err, err < 1e-3, "< 1e-3 (relative)")
     elif name.startswith("hist_"):
         h = read_hist(outdir)
         res.check("history lines written", len(h["t"]), len(h["t"]) >= 2, ">= 2")
@@ -1419,7 +1621,10 @@ ALL = ["sod_uniform", "sod_smr", "sod_amr", "sod_amr_level2",
        "kol_heating_balance", "kol_reproducible", "kol_drag_guard", "invalid_kolmogorov", "kol_energy_budget",
        "kol_scaling_laminar", "hist_conservation", "hist_matches_snapshots", "hist_interval_independent",
        "hist_shear_decay", "hist_pressure_work", "hist_laminar_budget", "hist_kolmogorov_eps",
-       "invalid_hist_interval"]
+       "invalid_hist_interval", "sts_shear_decay", "sts_entropy_mode", "sts_matches_explicit",
+       "sts_time_convergence", "sts_strang_order", "sts_sound_damping", "sts_stage_count", "sts_large_ratio",
+       "sts_max_stages", "sts_conservation", "sts_smr", "sts_amr", "sts_walls", "sts_wb_rest", "sts_integrators",
+       "sts_drag_rate", "sts_drag_stiff", "sts_drag_kolmogorov", "invalid_sts"]
 
 
 def main():

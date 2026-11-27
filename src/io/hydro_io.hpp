@@ -59,6 +59,10 @@ struct SimParams {
   Real viscosity_nu = 0.0, viscosity_bulk = 0.0, conduction_chi = 0.0;
   Real cfl_diff = 0.5; //safety factor of the explicit diffusive time-step limit
   int hist_interval = 0; //history.hst: a line every N steps (0 = no history file)
+  //diffusion time integration: explicit (inside the hydro stages) or rkl2 (RKL2 super-time-stepping,
+  //Strang-split); sts_max_stages caps the RKL2 stages per half step
+  std::string diffusion_integrator = "explicit";
+  int sts_max_stages = 50;
   //reconstruction: limiter (minmod, vanleer, superbee, mc) and variables (conserved, primitive)
   ReconOptions recon;
   //time integrator (euler, vl2, rk2), checked when integrator is created

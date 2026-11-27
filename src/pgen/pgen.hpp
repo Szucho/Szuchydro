@@ -51,7 +51,9 @@ struct ProblemHooks{
   //(forcing power, drag loss, cooling, ...) 
   //with their role in the kinetic-energy budget; evaluated every step
   HistoryHook history;
- 
+  //diffusion_integrator rkl2: a constant linear drag coefficient alpha (-alpha m, -alpha |m|^2/rho) that the
+  //RKL2 substeps integrate together with the diffusion (0 = none), with explicit it is not used
+  Real linear_drag = 0.0;
 };
 
 //the initial condition has to be set up

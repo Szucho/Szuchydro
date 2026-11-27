@@ -5,6 +5,7 @@
 #include <ios>
 #include <iostream>
 #include <fstream>
+#include <sstream>
 #include <filesystem>
 #include <stdexcept>
 #include <chrono>
@@ -26,6 +27,7 @@
 #include "solver/potential.hpp"
 #include "solver/reference.hpp"
 #include "solver/diffusion.hpp"
+#include "solver/sts.hpp"
 
 //CFL time step calculation (GPU/CPU parallel reduction)
 Real compute_cfl_dt(Mesh& mesh, Real gamma, Real cfl_max){
@@ -204,6 +206,13 @@ int main(int argc, char* argv[]){
     diff.nu_bulk = par.viscosity_bulk;
     diff.chi = par.conduction_chi;
     bool diffusion_limited = false; //which limit sets the time step (logged when it changes)
+    //diffusion_integrator rkl2: diffusion (and a problem drag) by RKL2 substeps, Strang-split around the hydro step
+    const bool sts = par.diffusion_integrator == "rkl2";
+    SuperTimeStepper stepper(mesh.inputs(), par.sts_max_stages);
+    WallFlags sts_walls;          //reflecting walls: no diffusive flux in the RKL2 substeps either
+    Real dt_sts = 0.0;            //forward-Euler-safe step of the RKL2 operator, this step
+    int sts_last_s = 0;           //logged when the stage count changes
+    bool sts_capped = false;      //logged when sts_max_stages starts or stops limiting the step
     mesh.BuildTree();
     mesh.CreateMeshBlocks();
     mesh.SetupNeighbors();
@@ -214,12 +223,16 @@ int main(int argc, char* argv[]){
 
     std::cout << "Active leaf blocks created: " << mesh.num_active_blocks() << "\n";
     //after the blocks exist the wall flags are per active block
-    if(diff.active()) integrator.set_diffusion(diff, ReflectingWallFlags(mesh, bc));
+    if(diff.active() && !sts) integrator.set_diffusion(diff, ReflectingWallFlags(mesh, bc));
+    if(sts) sts_walls = ReflectingWallFlags(mesh, bc);
 
 
     //initial state + problem-specific extras for the time loop (src/pgen/)
     ProblemHooks hooks;
     problem.init(mesh, par, hooks);
+
+    if(sts && !diff.active() && hooks.linear_drag <= 0.0)
+      throw std::runtime_error("Parameter error: diffusion_integrator rkl2 needs viscosity, conduction or a problem drag");
 
     //well-balancing across static refinement levels (src/solver/reference.*):
     //the initial state is the reference equilibrium of every level,
@@ -445,9 +458,8 @@ int main(int argc, char* argv[]){
 
           //map old states to new blocks (Direct, Prolongation, Restriction)
           mesh.TransferSolution(old_blocks, old_data);
-          if(diff.active()) integrator.set_diffusion(diff, ReflectingWallFlags(mesh, bc)); //blocks changed
-                                                                                           //need to reapply
-
+          if(diff.active() && !sts) integrator.set_diffusion(diff, ReflectingWallFlags(mesh, bc)); //blocks changed
+          if(sts) sts_walls = ReflectingWallFlags(mesh, bc);                                       //need to reapply
 
           //map initial to new blocks ~> end regrid and compare new state to initial
           auto initial_into_next = [&](){
@@ -479,8 +491,18 @@ int main(int argc, char* argv[]){
           throw std::runtime_error("invalid time step dt = " + std::to_string(dt_cfl) +
                                   " at t = " + std::to_string(t) +
                                   ": the solution contains non-physical values (NaN, rho <= 0 or p <= 0)");
-        if(diff.active()){ //explicit diffusion: its own stability limit, the smaller step wins
-                           //the diffusive cfl is needed for stability, DO NOT TOUCH
+        if(sts){ //RKL2: the step stays CFL-limited unless the stage cap sts_max_stages would be exceeded
+          dt_sts = StsTimeStep(mesh, par.gamma, diff, hooks.linear_drag, par.cfl_diff);
+          const Real dt_max = stepper.MaxStep(dt_sts);
+          if((dt_max < dt_cfl) != sts_capped){
+            sts_capped = dt_max < dt_cfl;
+            if(sts_capped) std::cout << "\nrkl2: time step limited by sts_max_stages = " << par.sts_max_stages
+                                     << " at t = " << t << " (dt = " << dt_max << ", dt_cfl = " << dt_cfl << ")\n";
+          }
+          dt_cfl = std::min(dt_cfl, dt_max);
+        }
+        if(diff.active() && !sts){ //explicit diffusion: its own stability limit, the smaller step wins
+                                   //the diffusive cfl is needed for stability, DO NOT TOUCH
           const Real dt_diff = DiffusiveTimeStep(mesh, par.gamma, diff, par.cfl_diff);
           if((dt_diff < dt_cfl) != diffusion_limited || n == 0){
             diffusion_limited = dt_diff < dt_cfl;
@@ -501,6 +523,22 @@ int main(int argc, char* argv[]){
 
         //this one, 170 degrees 40 minutes
         if(hooks.begin_step) hooks.begin_step(mesh, dt);
+        //one RKL2 substep of length tau (Strang: half before and half after the hydro step)
+        auto sts_half = [&](Real tau){
+          const int s = stepper.Step(mesh, tau, dt_sts, par.gamma, diff, hooks.linear_drag, sts_walls,
+                                     [&](){ exchange_ghosts(); apply_bcs(); });
+          if(s != sts_last_s){
+            sts_last_s = s;
+            std::ostringstream msg;
+            msg << std::setprecision(17) << "\nrkl2: s = " << s 
+                << " stages per half step (ratio " << tau/dt_sts << ")\n";
+            std::cout << msg.str();
+          }
+          //the register holds the substep's effective diffusive flux: boundary outflow of the substep
+          cumulative_mass_loss   += compute_boundary_outflow(mesh, 0)*tau;
+          cumulative_energy_loss += compute_boundary_outflow(mesh, 3)*tau;
+        };
+        if(sts) sts_half(0.5*dt);
         integrator.step(mesh, dt, gamma, par.recon, hooks.smooth_sources,
                         [&](){ exchange_ghosts(), apply_bcs(); }); //between stages
         //you work hard, you recover harder
@@ -512,6 +550,7 @@ int main(int argc, char* argv[]){
         //flux_view still holds this step's face fluxes (reflux and ghost exchange don't touch it)
         cumulative_mass_loss   += compute_boundary_outflow(mesh, 0) * dt;
         cumulative_energy_loss += compute_boundary_outflow(mesh, 3) * dt;
+        if(sts) sts_half(0.5*dt);
 
         n += 1;
         t += dt;

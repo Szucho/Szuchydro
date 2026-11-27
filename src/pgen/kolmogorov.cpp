@@ -119,7 +119,12 @@ void ProblemKolmogorov(Mesh& mesh, const SimParams& par, ProblemHooks& hooks){
 
   //forcing and drag inside every stage, from the stage state
   const Real ymin = par.ymin;
-  hooks.smooth_sources = [F, k, alpha, ymin](Mesh& m, const View4D& Us, const View4D& Uo, Real dt){
+  //rkl2: the drag moves into the RKL2 substeps (no explicit limit), the stages keep only the forcing
+  const bool sts = par.diffusion_integrator == "rkl2";
+  if(sts) hooks.linear_drag = alpha;
+  const Real alpha_stage = sts ? 0.0 : alpha;
+  hooks.smooth_sources = [F, k, alpha_stage, ymin](Mesh& m, const View4D& Us, const View4D& Uo, Real dt){
+    const Real alpha = alpha_stage;
     const int na = m.num_active_blocks();
     if(na == 0) return;
     const int g = m.inputs().nghost, nx1 = m.inputs().nx1_block, nx2 = m.inputs().nx2_block;
@@ -143,7 +148,7 @@ void ProblemKolmogorov(Mesh& mesh, const SimParams& par, ProblemHooks& hooks){
 
   //the drag is explicit: stop cleanly instead of going unstable
   //TODO: up for debate on this but this one might need a revisit
-  hooks.begin_step = [alpha](Mesh&, Real dt){
+  if(!sts) hooks.begin_step = [alpha](Mesh&, Real dt){
     if(alpha*dt > 0.5)
       throw std::runtime_error("kol_drag dt = " + std::to_string(alpha*dt) + " > 0.5: the drag is too strong for "
                                "its explicit integration; lower kol_drag or cfl (super-time-stepping)");

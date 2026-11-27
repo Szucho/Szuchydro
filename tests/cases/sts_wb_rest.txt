@@ -1,0 +1,31 @@
+# Placeholder for sts_wb_rest: the runner runs diffusion_wb_rest, diffusion_wb_tjump, diffusion_wb_pointmass_iso,
+# diffusion_wb_smr and diffusion_wb_amr with diffusion_integrator rkl2; every state must stay at rest.
+Nx 16
+Ny 64
+nx1_block 16
+nx2_block 16
+Nt 1000
+t0 0.0
+tf 5.0
+xmin 0.0
+xmax 0.25
+ymin 0.0
+ymax 4.0
+gamma 1.4
+cfl 0.4
+n_frames 2
+use_amr 0
+bc_left Periodic
+bc_right Periodic
+bc_bottom Hydrostatic
+bc_top Hydrostatic
+gas_profile atmosphere
+gas_rho0 1.0
+atm_g 1.0
+atm_T0 1.0
+well_balanced 1
+outdir sts_wb_rest_out
+viscosity_nu 0.01
+viscosity_bulk 0.01
+conduction_chi 0.01
+diffusion_integrator rkl2

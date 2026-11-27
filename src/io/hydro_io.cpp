@@ -79,7 +79,15 @@ SimParams readParams(const std::string& filename){ //reads in params.txt
   if(p.hist_interval < 0) throw std::runtime_error("Parameter error: hist_interval must be >= 0 (0 = no history)");
   if(p.viscosity_nu < 0.0 || p.viscosity_bulk < 0.0 || p.conduction_chi < 0.0)
     throw std::runtime_error("Parameter error: viscosity_nu, viscosity_bulk and conduction_chi must be >= 0");
-  if(p.viscosity_nu > 0.0 || p.viscosity_bulk > 0.0 || p.conduction_chi > 0.0){ //read only with diffusion
+  p.diffusion_integrator = has("diffusion_integrator") ? get("diffusion_integrator") : "explicit";
+  if(p.diffusion_integrator != "explicit" && p.diffusion_integrator != "rkl2")
+    throw std::runtime_error("Parameter error: unknown diffusion_integrator '" + p.diffusion_integrator +
+                             "' (explicit, rkl2)");
+  if(p.diffusion_integrator == "rkl2"){ //read only with rkl2
+    p.sts_max_stages = opti("sts_max_stages", 50);
+    if(p.sts_max_stages < 2) throw std::runtime_error("Parameter error: sts_max_stages must be >= 2");
+  }
+  if(p.viscosity_nu > 0.0 || p.viscosity_bulk > 0.0 || p.conduction_chi > 0.0 || p.diffusion_integrator == "rkl2"){
     p.cfl_diff = optd("cfl_diff", 0.5);
     if(!(p.cfl_diff > 0.0 && p.cfl_diff <= 1.0))
       throw std::runtime_error("Parameter error: cfl_diff must be in (0, 1]");
